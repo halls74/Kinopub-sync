@@ -1,34 +1,34 @@
 (function () {
   'use strict';
 
-  var VERSION = '0.0.1';
+  var VERSION = '0.0.2';
   var EDITION = 'alpha-readonly';
-  var COMPONENT = 'kp_sync001';
-  var LOG = '[KinoPUB Sync 0.0.1]';
+  var COMPONENT = 'kp_sync_alpha';
+  var LOG = '[KinoPUB Sync 0.0.2]';
   var API_HOST = 'https://api.service-kp.com';
   var CLIENT_ID = 'xbmc';
   var CLIENT_SECRET = 'cgg3gtifu46urtfp2zp1nqtba0k2ezxh';
-  var MAX_PAGES_PER_FOLDER = 50;
+  var MAX_PAGES_PER_FOLDER = 80;
   var PER_PAGE = 100;
-  var REPORT_SAMPLE_LIMIT = 10;
+  var REPORT_SAMPLE_LIMIT = 12;
 
   var KEY = {
     token: 'kp_token',
     refresh: 'kp_refresh',
-    lastStatus: 'kp_sync001_last_status',
-    report: 'kp_sync001_bookmarks_report',
-    tokenStatus: 'kp_sync001_token_status'
+    lastStatus: 'kp_sync002_last_status',
+    report: 'kp_sync002_bookmarks_report',
+    tokenStatus: 'kp_sync002_token_status',
+    cleanupReport: 'kp_sync002_lampa_cleanup_report'
   };
 
-  if (window.KinoPubSync001 && window.KinoPubSync001.version === VERSION) return;
+  if (window.KinoPubSync002 && window.KinoPubSync002.version === VERSION) return;
 
   function nowIso() {
     try { return new Date().toISOString(); } catch (e) { return String(Date.now()); }
   }
 
-  function isArray(v) {
-    return Object.prototype.toString.call(v) === '[object Array]';
-  }
+  function isArray(v) { return Object.prototype.toString.call(v) === '[object Array]'; }
+  function isObject(v) { return v && typeof v === 'object' && !isArray(v); }
 
   function parseJson(v) {
     if (!v) return v;
@@ -56,9 +56,11 @@
 
   function lang(key) {
     var ru = {
-      component: 'KinoPUB Sync 0.0.1',
+      component: 'KinoPUB Sync 0.0.2',
       sep: '— Проверка и чтение KinoPUB —',
       sep_descr: 'Тестовая read-only сборка. Ничего не импортирует в Lampa и ничего не меняет в KinoPUB.',
+      sep_cleanup: '— Очистка следов старого Sync-импорта —',
+      sep_cleanup_descr: 'Локальная очистка некорректных закладок, которые могли быть созданы старыми тестовыми версиями Sync. KinoPUB не меняется.',
       status: 'Последний статус',
       status_descr: 'Краткий результат последнего действия плагина.',
       check_token: 'Проверить токен основного KinoPUB',
@@ -71,16 +73,28 @@
       copy_report_descr: 'Копирует JSON-отчёт по папкам/закладкам для анализа. Токены в отчёт не включаются.',
       clear_report: 'Очистить отчёт',
       clear_report_descr: 'Удаляет сохранённый отчёт и статус этой тестовой сборки. Закладки Lampa и токены KinoPUB не трогаются.',
+      scan_bad_lampa: 'Найти некорректные закладки старого Sync',
+      scan_bad_lampa_descr: 'Ищет в локальных закладках Lampa карточки с признаками старого Sync-импорта и папки вида “KinoPUB: ...”. Ничего не удаляет.',
+      show_cleanup: 'Показать отчёт очистки Lampa',
+      show_cleanup_descr: 'Показывает, какие локальные записи Lampa будут затронуты при очистке.',
+      copy_cleanup: 'Скопировать отчёт очистки Lampa',
+      copy_cleanup_descr: 'Копирует JSON-отчёт по найденным некорректным локальным закладкам Lampa.',
+      clear_bad_lampa: 'Очистить найденные закладки старого Sync',
+      clear_bad_lampa_descr: 'Удаляет только найденные локальные записи старого Sync-импорта из закладок Lampa и папок “KinoPUB: ...”. Перед удалением показывает подтверждение.',
       no_token: 'Токен KinoPUB не найден. Сначала авторизуйтесь в основном KinoPUB-плагине.',
       token_ok: 'Токен найден, API доступен',
       token_refresh_ok: 'Токен обновлён через refresh_token, API доступен',
       token_bad: 'Токен найден, но API недоступен',
       reading: 'Читаю папки и закладки KinoPUB...',
       report_missing: 'Отчёт ещё не сформирован.',
+      cleanup_missing: 'Отчёт очистки ещё не сформирован.',
       report_cleared: 'Отчёт очищен.',
       copied: 'Отчёт скопирован.',
       copy_failed: 'Не удалось скопировать автоматически. Открыл текст отчёта.',
-      done: 'Чтение завершено'
+      done: 'Чтение завершено',
+      cleanup_scanned: 'Анализ Lampa-закладок завершён',
+      cleanup_done: 'Очистка Lampa-закладок завершена',
+      cleanup_cancelled: 'Очистка отменена'
     };
     return ru[key] || key;
   }
@@ -108,7 +122,6 @@
     text = String(text || '');
     storageSet(KEY.lastStatus, text);
     log(text);
-    try { if (window.Lampa && Lampa.Storage && Lampa.Storage.set) Lampa.Storage.set(KEY.lastStatus, text); } catch (e) {}
   }
 
   function noty(text) {
@@ -138,11 +151,13 @@
     try { alert(title + '\n\n' + text); } catch (e2) {}
   }
 
+  function confirmText(text) {
+    try { return window.confirm(String(text || '')); } catch (e) { return false; }
+  }
+
   function copyText(text) {
     text = String(text || '');
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      return navigator.clipboard.writeText(text);
-    }
+    if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(text);
     return new Promise(function (resolve, reject) {
       var area;
       try {
@@ -165,9 +180,7 @@
 
   function encodeParams(obj) {
     var out = [];
-    for (var k in obj) if (obj.hasOwnProperty(k) && obj[k] !== undefined && obj[k] !== null) {
-      out.push(encodeURIComponent(k) + '=' + encodeURIComponent(String(obj[k])));
-    }
+    for (var k in obj) if (obj.hasOwnProperty(k) && obj[k] !== undefined && obj[k] !== null) out.push(encodeURIComponent(k) + '=' + encodeURIComponent(String(obj[k])));
     return out.join('&');
   }
 
@@ -192,24 +205,13 @@
 
   function tokenAccess() { return storageGet(KEY.token, '') || ''; }
   function tokenRefresh() { return storageGet(KEY.refresh, '') || ''; }
-  function setTokens(access, refresh) {
-    if (access) storageSet(KEY.token, access);
-    if (refresh) storageSet(KEY.refresh, refresh);
-  }
+  function setTokens(access, refresh) { if (access) storageSet(KEY.token, access); if (refresh) storageSet(KEY.refresh, refresh); }
 
   function refreshToken() {
     var rt = tokenRefresh();
     if (!rt) return Promise.reject({ status: 'no_refresh_token' });
-    return request('POST', API_HOST + '/oauth2/token', encodeParams({
-      grant_type: 'refresh_token',
-      client_id: CLIENT_ID,
-      client_secret: CLIENT_SECRET,
-      refresh_token: rt
-    }), { 'Content-Type': 'application/x-www-form-urlencoded' }, 20000).then(function (json) {
-      if (json && json.access_token) {
-        setTokens(json.access_token, json.refresh_token);
-        return json;
-      }
+    return request('POST', API_HOST + '/oauth2/token', encodeParams({ grant_type: 'refresh_token', client_id: CLIENT_ID, client_secret: CLIENT_SECRET, refresh_token: rt }), { 'Content-Type': 'application/x-www-form-urlencoded' }, 20000).then(function (json) {
+      if (json && json.access_token) { setTokens(json.access_token, json.refresh_token); return json; }
       return Promise.reject({ status: 'bad_refresh_response', body: json });
     });
   }
@@ -219,9 +221,7 @@
     if (!t) return Promise.reject({ status: 401, reason: 'no_token' });
     return request('GET', addUrlParams(API_HOST + '/v1' + path, params || {}), false, { 'Authorization': 'Bearer ' + t }, 30000).catch(function (err) {
       var http = err && (err.http || (err.xhr && err.xhr.status));
-      if (http === 401 && !retried && tokenRefresh()) {
-        return refreshToken().then(function () { return apiGet(path, params, true); });
-      }
+      if (http === 401 && !retried && tokenRefresh()) return refreshToken().then(function () { return apiGet(path, params, true); });
       return Promise.reject(err);
     });
   }
@@ -231,6 +231,7 @@
     if (!json) return [];
     if (isArray(json)) return json;
     if (isArray(json.items)) return json.items;
+    if (isArray(json.bookmarks)) return json.bookmarks;
     if (isArray(json.folders)) return json.folders;
     if (isArray(json.data)) return json.data;
     if (isArray(json.results)) return json.results;
@@ -262,22 +263,36 @@
     return v || '';
   }
 
-  function normalizeItem(item, folder) {
+  function normalizeContentKind(type, subtype) {
+    var raw = String(type || '').toLowerCase();
+    var sub = String(subtype || '').toLowerCase();
+    if (raw === 'movie' || raw === 'documovie') return 'movie';
+    if (raw === 'serial' || raw === 'docuserial' || raw === 'tvshow' || raw === 'show' || raw === 'series' || raw === 'tv' || raw === 'anime') return 'tv';
+    if (sub === 'movie') return 'movie';
+    if (sub === 'serial' || sub === 'tv' || sub === 'series') return 'tv';
+    return raw || 'unknown';
+  }
+
+  function normalizeItem(item, folder, sourceIndex) {
     item = item || {};
     var id = itemId(item);
     var title = firstValue(item, ['title', 'name', 'ru_title', 'original_title', 'original_name', 'imdb_title']);
     var type = firstValue(item, ['type', 'media_type', 'kind', 'category']);
+    var subtype = firstValue(item, ['subtype', 'sub_type']);
     var year = firstValue(item, ['year', 'release_year', 'released', 'premiered']);
     return {
       id: id,
       title: String(title || ''),
       type: String(type || ''),
+      subtype: String(subtype || ''),
+      normalized_kind: normalizeContentKind(type, subtype),
       year: String(year || ''),
       imdb_id: String(externalValue(item, ['imdb', 'imdb_id', 'imdbid']) || ''),
       tmdb_id: String(externalValue(item, ['tmdb', 'tmdb_id', 'tmdbid']) || ''),
       kinopoisk_id: String(externalValue(item, ['kinopoisk', 'kinopoisk_id', 'kp_id', 'kp']) || ''),
       folder_id: folder ? String(folder.id) : '',
       folder_title: folder ? String(folder.title || '') : '',
+      source_index: sourceIndex || 0,
       raw_keys: item && typeof item === 'object' ? Object.keys(item).sort() : []
     };
   }
@@ -287,60 +302,13 @@
     var out = {};
     var keys = Object.keys(item).sort();
     for (var i = 0; i < keys.length && i < 80; i++) {
-      var k = keys[i];
-      var v = item[k];
+      var k = keys[i], v = item[k];
       if (/token|secret|password/i.test(k)) out[k] = '[REDACTED]';
       else if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean' || v === null) out[k] = v;
       else if (isArray(v)) out[k] = '[Array:' + v.length + ']';
       else if (typeof v === 'object') out[k] = '[Object keys:' + Object.keys(v).slice(0, 20).join(',') + ']';
     }
     return out;
-  }
-
-  function checkToken() {
-    var access = tokenAccess();
-    var refresh = tokenRefresh();
-    var base = { checkedAt: nowIso(), accessTokenPresent: !!access, refreshTokenPresent: !!refresh, verified: false, refreshed: false, error: null };
-    if (!access) {
-      storageSet(KEY.tokenStatus, base);
-      setStatus(lang('no_token'));
-      noty(lang('no_token'));
-      return Promise.resolve(base);
-    }
-    return apiGet('/bookmarks', {}).then(function (json) {
-      base.verified = true;
-      base.foldersCount = asArray(json).length;
-      storageSet(KEY.tokenStatus, base);
-      setStatus(lang('token_ok') + '. Папок: ' + base.foldersCount);
-      noty(lang('token_ok'));
-      return base;
-    }).catch(function (err) {
-      var http = err && (err.http || (err.xhr && err.xhr.status));
-      if (http === 401 && refresh) {
-        return refreshToken().then(function () {
-          base.refreshed = true;
-          return apiGet('/bookmarks', {}).then(function (json) {
-            base.verified = true;
-            base.foldersCount = asArray(json).length;
-            storageSet(KEY.tokenStatus, base);
-            setStatus(lang('token_refresh_ok') + '. Папок: ' + base.foldersCount);
-            noty(lang('token_refresh_ok'));
-            return base;
-          });
-        }).catch(function (err2) {
-          base.error = errorSummary(err2);
-          storageSet(KEY.tokenStatus, base);
-          setStatus(lang('token_bad') + ': ' + base.error.message);
-          noty(lang('token_bad'));
-          return base;
-        });
-      }
-      base.error = errorSummary(err);
-      storageSet(KEY.tokenStatus, base);
-      setStatus(lang('token_bad') + ': ' + base.error.message);
-      noty(lang('token_bad'));
-      return base;
-    });
   }
 
   function errorSummary(err) {
@@ -355,71 +323,147 @@
     return { http: http || 0, status: status || '', message: redactSecrets(msg).slice(0, 500) };
   }
 
-  function folderId(folder) {
-    return folder && folder.id != null ? String(folder.id) : '';
+  function checkToken() {
+    var access = tokenAccess();
+    var refresh = tokenRefresh();
+    var base = { checkedAt: nowIso(), accessTokenPresent: !!access, refreshTokenPresent: !!refresh, verified: false, refreshed: false, error: null };
+    if (!access) { storageSet(KEY.tokenStatus, base); setStatus(lang('no_token')); noty(lang('no_token')); return Promise.resolve(base); }
+    return apiGet('/bookmarks', {}).then(function (json) {
+      base.verified = true; base.foldersCount = asArray(json).length; storageSet(KEY.tokenStatus, base); setStatus(lang('token_ok') + '. Папок: ' + base.foldersCount); noty(lang('token_ok')); return base;
+    }).catch(function (err) {
+      var http = err && (err.http || (err.xhr && err.xhr.status));
+      if (http === 401 && refresh) return refreshToken().then(function () {
+        base.refreshed = true;
+        return apiGet('/bookmarks', {}).then(function (json) { base.verified = true; base.foldersCount = asArray(json).length; storageSet(KEY.tokenStatus, base); setStatus(lang('token_refresh_ok') + '. Папок: ' + base.foldersCount); noty(lang('token_refresh_ok')); return base; });
+      }).catch(function (err2) { base.error = errorSummary(err2); storageSet(KEY.tokenStatus, base); setStatus(lang('token_bad') + ': ' + base.error.message); noty(lang('token_bad')); return base; });
+      base.error = errorSummary(err); storageSet(KEY.tokenStatus, base); setStatus(lang('token_bad') + ': ' + base.error.message); noty(lang('token_bad')); return base;
+    });
   }
 
-  function folderTitle(folder) {
-    return String((folder && (folder.title || folder.name)) || 'Без названия');
+  function folderId(folder) { return folder && folder.id != null ? String(folder.id) : ''; }
+  function folderTitle(folder) { return String((folder && (folder.title || folder.name)) || 'Без названия'); }
+
+  function makeStrategy(name, path, paramsBuilder) { return { name: name, path: path, paramsBuilder: paramsBuilder }; }
+
+  function strategyList(fid) {
+    return [
+      makeStrategy('path_page_perpage', '/bookmarks/' + encodeURIComponent(fid), function (page) { return { page: page, perpage: PER_PAGE }; }),
+      makeStrategy('view_folder_page_perpage', '/bookmarks/view', function (page) { return { folder: fid, page: page, perpage: PER_PAGE }; }),
+      makeStrategy('path_page_limit', '/bookmarks/' + encodeURIComponent(fid), function (page) { return { page: page, limit: PER_PAGE }; })
+    ];
+  }
+
+  function readFolderAttempt(folder, strategy) {
+    var fid = folderId(folder), ftitle = folderTitle(folder), expected = Number(folder && folder.count) || 0;
+    var attempt = { strategy: strategy.name, expectedRows: expected, pagesRequested: 0, rawRowsFetched: 0, uniqueItems: 0, duplicateRows: 0, stoppedReason: '', error: null, pageTrace: [], rows: [], seen: {} };
+    var page = 1;
+    function readNext() {
+      if (page > MAX_PAGES_PER_FOLDER) { attempt.stoppedReason = 'max_pages_guard'; return Promise.resolve(attempt); }
+      attempt.pagesRequested++;
+      return apiGet(strategy.path, strategy.paramsBuilder(page)).then(function (json) {
+        var items = asArray(json), newUnique = 0, duplicateRows = 0, firstId = '', lastId = '';
+        for (var i = 0; i < items.length; i++) {
+          var rawId = itemId(items[i]) || ('no_id:' + fid + ':' + strategy.name + ':' + page + ':' + i);
+          if (!firstId) firstId = rawId;
+          lastId = rawId;
+          var norm = normalizeItem(items[i], { id: fid, title: ftitle }, attempt.rawRowsFetched + 1);
+          if (!norm.id) norm.id = rawId;
+          attempt.rows.push({ norm: norm, raw: items[i] });
+          attempt.rawRowsFetched++;
+          if (!attempt.seen[norm.id]) { attempt.seen[norm.id] = true; attempt.uniqueItems++; newUnique++; }
+          else { attempt.duplicateRows++; duplicateRows++; }
+        }
+        attempt.pageTrace.push({ strategy: strategy.name, page: page, itemsReturned: items.length, newUniqueItems: newUnique, duplicateRows: duplicateRows, firstId: firstId, lastId: lastId });
+        if (!items.length) { attempt.stoppedReason = page === 1 ? 'empty_folder' : 'empty_page'; return attempt; }
+        if (expected && attempt.rawRowsFetched >= expected) { attempt.stoppedReason = 'reported_raw_count_reached'; return attempt; }
+        if (page > 1 && newUnique === 0) { attempt.stoppedReason = 'no_new_items_page_maybe_ignored'; return attempt; }
+        if (items.length < PER_PAGE) { attempt.stoppedReason = 'short_page'; return attempt; }
+        page++;
+        return readNext();
+      }).catch(function (err) { attempt.error = errorSummary(err); attempt.stoppedReason = 'error'; return attempt; });
+    }
+    return readNext().then(function (a) { delete a.seen; return a; });
+  }
+
+  function betterAttempt(a, b) {
+    if (!a) return b;
+    if (!b) return a;
+    if ((b.rawRowsFetched || 0) > (a.rawRowsFetched || 0)) return b;
+    if ((b.rawRowsFetched || 0) === (a.rawRowsFetched || 0) && (b.uniqueItems || 0) > (a.uniqueItems || 0)) return b;
+    if (a.error && !b.error) return b;
+    return a;
   }
 
   function readFolder(folder, report) {
-    var fid = folderId(folder);
-    var ftitle = folderTitle(folder);
-    var expected = Number(folder && folder.count) || 0;
-    var folderReport = {
-      id: fid,
-      title: ftitle,
-      countReported: expected,
-      pagesRequested: 0,
-      itemsFetched: 0,
-      uniqueItems: 0,
-      missingByCount: 0,
-      stoppedReason: '',
-      error: null
-    };
-    var seen = {};
-    var page = 1;
-
-    function readNext() {
-      if (page > MAX_PAGES_PER_FOLDER) { folderReport.stoppedReason = 'max_pages_guard'; return Promise.resolve(folderReport); }
-      folderReport.pagesRequested++;
-      return apiGet('/bookmarks/' + encodeURIComponent(fid), { page: page, perpage: PER_PAGE }).then(function (json) {
-        var items = asArray(json);
-        var newCount = 0;
-        for (var i = 0; i < items.length; i++) {
-          var norm = normalizeItem(items[i], { id: fid, title: ftitle });
-          if (!norm.id) norm.id = 'no_id:' + fid + ':' + page + ':' + i;
-          if (!seen[norm.id]) {
-            seen[norm.id] = true;
-            newCount++;
-            folderReport.uniqueItems++;
-            report.catalog.push(norm);
-            if (!report._globalItems[norm.id]) report._globalItems[norm.id] = { id: norm.id, title: norm.title, type: norm.type, year: norm.year, folders: [] };
-            report._globalItems[norm.id].folders.push({ id: fid, title: ftitle });
-            if (report.rawSamples.length < REPORT_SAMPLE_LIMIT) report.rawSamples.push({ folder_id: fid, folder_title: ftitle, item: sanitizeRawSample(items[i]) });
-          }
-        }
-        folderReport.itemsFetched += items.length;
-
-        if (!items.length) { folderReport.stoppedReason = page === 1 ? 'empty_folder' : 'empty_page'; return folderReport; }
-        if (expected && folderReport.uniqueItems >= expected) { folderReport.stoppedReason = 'reported_count_reached'; return folderReport; }
-        if (page > 1 && newCount === 0) { folderReport.stoppedReason = 'no_new_items_page_maybe_ignored'; return folderReport; }
-        if (!expected) { folderReport.stoppedReason = 'single_page_no_reported_count'; return folderReport; }
-        if (items.length < PER_PAGE && !expected) { folderReport.stoppedReason = 'short_page'; return folderReport; }
-        page++;
-        return readNext();
-      }).catch(function (err) {
-        folderReport.error = errorSummary(err);
-        folderReport.stoppedReason = 'error';
-        return folderReport;
-      });
+    var fid = folderId(folder), ftitle = folderTitle(folder), expected = Number(folder && folder.count) || 0;
+    var strategies = strategyList(fid), attempts = [], best = null;
+    var chain = Promise.resolve();
+    for (var si = 0; si < strategies.length; si++) {
+      (function (strategy, index) {
+        chain = chain.then(function () {
+          if (index > 0 && best && expected && best.rawRowsFetched >= expected) return null;
+          if (index > 0 && best && !expected && best.rawRowsFetched > 0) return null;
+          return readFolderAttempt(folder, strategy).then(function (attempt) { attempts.push(attempt); best = betterAttempt(best, attempt); });
+        });
+      })(strategies[si], si);
     }
+    return chain.then(function () {
+      best = best || { strategy: '', pagesRequested: 0, rawRowsFetched: 0, uniqueItems: 0, duplicateRows: 0, stoppedReason: 'no_attempt', error: null, rows: [] };
+      var folderReport = {
+        id: fid,
+        title: ftitle,
+        countReported: expected,
+        selectedStrategy: best.strategy,
+        pagesRequested: best.pagesRequested,
+        rawRowsFetched: best.rawRowsFetched,
+        itemsFetched: best.rawRowsFetched,
+        uniqueItems: best.uniqueItems,
+        duplicateRows: best.duplicateRows,
+        missingRawByCount: expected && best.rawRowsFetched < expected ? expected - best.rawRowsFetched : 0,
+        extraRawOverCount: expected && best.rawRowsFetched > expected ? best.rawRowsFetched - expected : 0,
+        stoppedReason: best.stoppedReason,
+        error: best.error,
+        attempts: [],
+        pageTrace: best.pageTrace || []
+      };
+      for (var ai = 0; ai < attempts.length; ai++) folderReport.attempts.push({ strategy: attempts[ai].strategy, pagesRequested: attempts[ai].pagesRequested, rawRowsFetched: attempts[ai].rawRowsFetched, uniqueItems: attempts[ai].uniqueItems, duplicateRows: attempts[ai].duplicateRows, stoppedReason: attempts[ai].stoppedReason, error: attempts[ai].error });
 
-    return readNext().then(function (fr) {
-      if (fr.countReported && fr.uniqueItems < fr.countReported) fr.missingByCount = fr.countReported - fr.uniqueItems;
-      return fr;
+      var seenInFolder = {};
+      for (var r = 0; r < best.rows.length; r++) {
+        var norm = best.rows[r].norm;
+        if (!seenInFolder[norm.id]) {
+          seenInFolder[norm.id] = true;
+          report.catalog.push(norm);
+          if (!report._globalItems[norm.id]) report._globalItems[norm.id] = { id: norm.id, title: norm.title, type: norm.type, subtype: norm.subtype, normalized_kind: norm.normalized_kind, year: norm.year, imdb_id: norm.imdb_id, kinopoisk_id: norm.kinopoisk_id, tmdb_id: norm.tmdb_id, folders: [] };
+          report._globalItems[norm.id].folders.push({ id: fid, title: ftitle });
+          addStats(report, norm);
+        }
+        if (report.rawSamples.length < REPORT_SAMPLE_LIMIT) report.rawSamples.push({ folder_id: fid, folder_title: ftitle, item: sanitizeRawSample(best.rows[r].raw) });
+      }
+      if (folderReport.missingRawByCount) report.warnings.push('Папка “' + ftitle + '”: заявлено ' + expected + ', сырых строк получено ' + best.rawRowsFetched + ', не хватает ' + folderReport.missingRawByCount + '.');
+      if (folderReport.duplicateRows) report.warnings.push('Папка “' + ftitle + '”: найдено повторяющихся строк item id: ' + folderReport.duplicateRows + '. Это не обязательно ошибка, но важно для будущего импорта.');
+      return folderReport;
     });
+  }
+
+  function inc(obj, key, n) { key = key || 'unknown'; obj[key] = (obj[key] || 0) + (n || 1); }
+
+  function addMissingSample(arr, norm) {
+    if (arr.length >= 50) return;
+    arr.push({ id: norm.id, title: norm.title, type: norm.type, subtype: norm.subtype, normalized_kind: norm.normalized_kind, year: norm.year, folder_id: norm.folder_id, folder_title: norm.folder_title });
+  }
+
+  function addStats(report, norm) {
+    inc(report.stats.typeStats, norm.type || 'unknown', 1);
+    inc(report.stats.subtypeStats, norm.subtype || 'empty', 1);
+    inc(report.stats.normalizedKindStats, norm.normalized_kind || 'unknown', 1);
+    if (norm.imdb_id) report.stats.withImdb++; else { report.stats.withoutImdb++; addMissingSample(report.stats.missingImdbSamples, norm); }
+    if (norm.kinopoisk_id) report.stats.withKinopoisk++; else { report.stats.withoutKinopoisk++; addMissingSample(report.stats.missingKinopoiskSamples, norm); }
+    if (norm.tmdb_id) report.stats.withTmdb++; else report.stats.withoutTmdb++;
+    var known = { movie: true, documovie: true, serial: true, docuserial: true, tvshow: true, show: true, series: true, tv: true, anime: true };
+    var t = String(norm.type || '').toLowerCase();
+    if (!known[t] && !report.stats.unknownRawTypes[t || 'unknown']) report.stats.unknownRawTypes[t || 'unknown'] = 1;
+    else if (!known[t]) report.stats.unknownRawTypes[t || 'unknown']++;
   }
 
   function buildReportSummary(report) {
@@ -427,13 +471,27 @@
     lines.push('KinoPUB Sync v' + VERSION + ' — отчёт чтения закладок');
     lines.push('Дата: ' + report.generatedAt);
     lines.push('Папок: ' + report.totals.folders);
-    lines.push('Элементов по счётчикам папок: ' + report.totals.reportedItems);
-    lines.push('Считано элементов в папках: ' + report.totals.fetchedItems);
-    lines.push('Уникальных item id: ' + report.totals.uniqueItems);
+    lines.push('Элементов по счётчикам папок: ' + report.totals.reportedRows);
+    lines.push('Сырых строк получено: ' + report.totals.rawRowsFetched);
+    lines.push('Уникальных строк внутри папок: ' + report.totals.uniqueRowsInFolders);
+    lines.push('Уникальных KinoPUB item id глобально: ' + report.totals.uniqueGlobalItems);
     lines.push('Папок с ошибками: ' + report.totals.folderErrors);
-    lines.push('Папок с недочётом по count: ' + report.totals.foldersWithMissingCount);
+    lines.push('Папок с недочётом raw-count: ' + report.totals.foldersWithMissingRawCount);
+    lines.push('Повторяющихся строк item id в папках: ' + report.totals.duplicateRowsInFolders);
     lines.push('');
-    lines.push('Важно: v0.0.1 ничего не импортирует в Lampa и ничего не меняет в KinoPUB.');
+    lines.push('Типы контента: ' + JSON.stringify(report.stats.typeStats));
+    lines.push('Нормализованные типы: ' + JSON.stringify(report.stats.normalizedKindStats));
+    lines.push('IMDb есть/нет: ' + report.stats.withImdb + ' / ' + report.stats.withoutImdb);
+    lines.push('Kinopoisk есть/нет: ' + report.stats.withKinopoisk + ' / ' + report.stats.withoutKinopoisk);
+    lines.push('TMDB есть/нет: ' + report.stats.withTmdb + ' / ' + report.stats.withoutTmdb);
+    lines.push('');
+    if (report.warnings && report.warnings.length) {
+      lines.push('Предупреждения:');
+      for (var i = 0; i < report.warnings.length && i < 12; i++) lines.push('- ' + report.warnings[i]);
+      if (report.warnings.length > 12) lines.push('- ... ещё ' + (report.warnings.length - 12));
+      lines.push('');
+    }
+    lines.push('Важно: v0.0.2 ничего не импортирует в Lampa и ничего не меняет в KinoPUB. Локальная очистка Lampa выполняется только отдельной кнопкой и только после подтверждения.');
     return lines.join('\n');
   }
 
@@ -448,39 +506,38 @@
       source: 'KinoPUB API bookmarks read-only audit',
       warnings: [],
       token: { accessTokenPresent: !!tokenAccess(), refreshTokenPresent: !!tokenRefresh(), tokensIncluded: false },
-      api: { host: API_HOST, endpoints: ['/v1/bookmarks', '/v1/bookmarks/<folder_id>'] },
+      api: { host: API_HOST, endpoints: ['/v1/bookmarks', '/v1/bookmarks/<folder_id>', '/v1/bookmarks/view?folder=<folder_id>'] },
       folders: [],
       catalog: [],
       rawSamples: [],
-      totals: { folders: 0, reportedItems: 0, fetchedItems: 0, uniqueItems: 0, folderErrors: 0, foldersWithMissingCount: 0 },
+      stats: { typeStats: {}, subtypeStats: {}, normalizedKindStats: {}, unknownRawTypes: {}, withImdb: 0, withoutImdb: 0, withKinopoisk: 0, withoutKinopoisk: 0, withTmdb: 0, withoutTmdb: 0, missingImdbSamples: [], missingKinopoiskSamples: [] },
+      totals: { folders: 0, reportedRows: 0, rawRowsFetched: 0, uniqueRowsInFolders: 0, uniqueGlobalItems: 0, folderErrors: 0, foldersWithMissingRawCount: 0, duplicateRowsInFolders: 0 },
       _globalItems: {}
     };
-
     return apiGet('/bookmarks', {}).then(function (json) {
       var folders = asArray(json);
       report.totals.folders = folders.length;
       var chain = Promise.resolve();
-      for (var i = 0; i < folders.length; i++) {
-        (function (folder) {
-          chain = chain.then(function () { return readFolder(folder, report).then(function (fr) { report.folders.push(fr); }); });
-        })(folders[i]);
-      }
+      for (var i = 0; i < folders.length; i++) (function (folder) { chain = chain.then(function () { return readFolder(folder, report).then(function (fr) { report.folders.push(fr); }); }); })(folders[i]);
       return chain;
     }).then(function () {
       var uniqueCount = 0;
       for (var k in report._globalItems) if (report._globalItems.hasOwnProperty(k)) uniqueCount++;
-      report.totals.uniqueItems = uniqueCount;
+      report.totals.uniqueGlobalItems = uniqueCount;
       for (var i = 0; i < report.folders.length; i++) {
-        report.totals.reportedItems += report.folders[i].countReported || 0;
-        report.totals.fetchedItems += report.folders[i].uniqueItems || 0;
+        report.totals.reportedRows += report.folders[i].countReported || 0;
+        report.totals.rawRowsFetched += report.folders[i].rawRowsFetched || 0;
+        report.totals.uniqueRowsInFolders += report.folders[i].uniqueItems || 0;
+        report.totals.duplicateRowsInFolders += report.folders[i].duplicateRows || 0;
         if (report.folders[i].error) report.totals.folderErrors++;
-        if (report.folders[i].missingByCount) report.totals.foldersWithMissingCount++;
+        if (report.folders[i].missingRawByCount) report.totals.foldersWithMissingRawCount++;
       }
       report.uniqueItems = report._globalItems;
       delete report._globalItems;
+      if (!report.warnings.length) report.warnings.push('Критичных предупреждений нет. Проверьте totals и pageTrace для больших папок.');
       report.summaryText = buildReportSummary(report);
       storageSet(KEY.report, report);
-      setStatus(lang('done') + ': папок ' + report.totals.folders + ', считано ' + report.totals.fetchedItems + ', уникальных ' + report.totals.uniqueItems + ', ошибок ' + report.totals.folderErrors);
+      setStatus(lang('done') + ': папок ' + report.totals.folders + ', raw ' + report.totals.rawRowsFetched + '/' + report.totals.reportedRows + ', уникальных ' + report.totals.uniqueGlobalItems + ', ошибок ' + report.totals.folderErrors);
       noty(lang('done'));
       return report;
     }).catch(function (err) {
@@ -492,71 +549,153 @@
     });
   }
 
-  function getReport() {
-    return storageGet(KEY.report, null);
+  function getReport() { return storageGet(KEY.report, null); }
+  function reportText() { var r = getReport(); return r ? JSON.stringify(r, null, 2) : lang('report_missing'); }
+  function showReport() { var r = getReport(); if (!r) { noty(lang('report_missing')); return; } showText('KinoPUB Sync 0.0.2', r.summaryText || reportText()); }
+  function copyReport() { var text = reportText(); return copyText(text).then(function () { noty(lang('copied')); }).catch(function () { noty(lang('copy_failed')); showText('KinoPUB Sync 0.0.2 — отчёт', text); }); }
+  function clearReport() { storageRemove(KEY.report); storageRemove(KEY.tokenStatus); storageSet(KEY.lastStatus, ''); noty(lang('report_cleared')); }
+
+  function favoriteStorage() { var fav = storageGet('favorite', {}) || {}; if (typeof fav === 'string') fav = parseJson(fav) || {}; return fav && typeof fav === 'object' ? fav : {}; }
+  function customFavoriteStorage() { var fav = storageGet('custom_favorite', {}) || {}; if (typeof fav === 'string') fav = parseJson(fav) || {}; return fav && typeof fav === 'object' ? fav : {}; }
+
+  function cardTitle(card) { return String(card && (card.title || card.name || card.original_title || card.original_name) || ''); }
+
+  function isOldSyncCard(card) {
+    if (!card || typeof card !== 'object') return false;
+    if (card.kp_sync_fallback !== undefined) return true;
+    if (card.kp_sync_match_source !== undefined) return true;
+    if (card.kp_sync_match_confidence !== undefined) return true;
+    if (card.kinopub_id !== undefined) return true;
+    if (card.kp_id !== undefined && (card.source === 'kinopub_sync' || card.source === 'KinoPUB Sync' || card.source === 'kinopub')) return true;
+    if (card.source === 'kinopub_sync' || card.source === 'KinoPUB Sync') return true;
+    return false;
   }
 
-  function reportText() {
-    var r = getReport();
-    if (!r) return lang('report_missing');
-    return JSON.stringify(r, null, 2);
+  function mapCardsById(cards) {
+    var out = {};
+    for (var i = 0; cards && i < cards.length; i++) if (cards[i] && cards[i].id != null) out[String(cards[i].id)] = cards[i];
+    return out;
   }
 
-  function showReport() {
-    var r = getReport();
-    if (!r) { noty(lang('report_missing')); return; }
-    showText('KinoPUB Sync 0.0.1', r.summaryText || reportText());
+  function removeIdsFromArray(arr, ids) {
+    if (!arr || !arr.length) return 0;
+    var removed = 0;
+    for (var i = arr.length - 1; i >= 0; i--) if (ids[String(arr[i])]) { arr.splice(i, 1); removed++; }
+    return removed;
   }
 
-  function copyReport() {
-    var text = reportText();
-    return copyText(text).then(function () { noty(lang('copied')); }).catch(function () {
-      noty(lang('copy_failed'));
-      showText('KinoPUB Sync 0.0.1 — отчёт', text);
-    });
+  function scanOldLampaBookmarks() {
+    var fav = favoriteStorage();
+    var custom = customFavoriteStorage();
+    var cards = fav.card || [];
+    var customCards = custom.customTypes && custom.customTypes.card || [];
+    var cardMap = mapCardsById(cards);
+    var customCardMap = mapCardsById(customCards);
+    var suspectIds = {}, suspectCards = [], customTypes = [], arrays = { book: 0, book_movie: 0, book_tv: 0, custom: 0 };
+    function markId(id, reason, card) {
+      if (id == null || id === '') return;
+      var sid = String(id);
+      if (!suspectIds[sid]) { suspectIds[sid] = { id: sid, reason: reason, title: cardTitle(card || cardMap[sid] || customCardMap[sid]) }; suspectCards.push(suspectIds[sid]); }
+    }
+    for (var i = 0; i < cards.length; i++) if (isOldSyncCard(cards[i])) markId(cards[i].id, 'card_marker_in_favorite.card', cards[i]);
+    for (var j = 0; j < customCards.length; j++) if (isOldSyncCard(customCards[j])) markId(customCards[j].id, 'card_marker_in_custom_favorite.card', customCards[j]);
+    var types = custom.customTypes || {};
+    for (var typeName in types) if (types.hasOwnProperty(typeName) && typeName !== 'card') {
+      if (String(typeName).indexOf('KinoPUB:') === 0) {
+        var uid = types[typeName];
+        var arr = custom[uid] || [];
+        customTypes.push({ name: typeName, uid: uid, items: arr.length });
+        for (var a = 0; a < arr.length; a++) markId(arr[a], 'custom_folder_' + typeName, customCardMap[String(arr[a])] || cardMap[String(arr[a])]);
+      }
+    }
+    arrays.book = countIdsInArray(fav.book, suspectIds);
+    arrays.book_movie = countIdsInArray(fav.book_movie, suspectIds);
+    arrays.book_tv = countIdsInArray(fav.book_tv, suspectIds);
+    for (var ct = 0; ct < customTypes.length; ct++) arrays.custom += customTypes[ct].items;
+    var report = { version: VERSION, generatedAt: nowIso(), source: 'local Lampa cleanup scan for old KinoPUB Sync imports', safeMode: 'only old Sync markers and custom folders named KinoPUB:*', tokensIncluded: false, suspectIdsCount: suspectCards.length, suspectIds: suspectCards.slice(0, 300), customTypesToRemove: customTypes, arraysAffected: arrays, applied: false };
+    storageSet(KEY.cleanupReport, report);
+    setStatus(lang('cleanup_scanned') + ': найдено id ' + report.suspectIdsCount + ', папок ' + customTypes.length);
+    noty(lang('cleanup_scanned'));
+    return report;
   }
 
-  function clearReport() {
-    storageRemove(KEY.report);
-    storageRemove(KEY.tokenStatus);
-    storageSet(KEY.lastStatus, '');
-    noty(lang('report_cleared'));
+  function countIdsInArray(arr, ids) { var n = 0; for (var i = 0; arr && i < arr.length; i++) if (ids[String(arr[i])]) n++; return n; }
+  function cleanupReport() { return storageGet(KEY.cleanupReport, null); }
+  function cleanupReportText() { var r = cleanupReport(); return r ? JSON.stringify(r, null, 2) : lang('cleanup_missing'); }
+  function showCleanupReport() { var r = cleanupReport(); if (!r) { noty(lang('cleanup_missing')); return; } showText('KinoPUB Sync 0.0.2 — очистка Lampa', JSON.stringify(r, null, 2)); }
+  function copyCleanupReport() { var text = cleanupReportText(); return copyText(text).then(function () { noty(lang('copied')); }).catch(function () { noty(lang('copy_failed')); showText('KinoPUB Sync 0.0.2 — очистка Lampa', text); }); }
+
+  function applyOldLampaCleanup() {
+    var report = cleanupReport();
+    if (!report) report = scanOldLampaBookmarks();
+    if (!report || (!report.suspectIdsCount && (!report.customTypesToRemove || !report.customTypesToRemove.length))) { noty('Нечего очищать.'); return false; }
+    var text = 'Будут удалены только локальные следы старого Sync-импорта в Lampa.\n\n' +
+      'ID к удалению из book/book_movie/book_tv: ' + report.suspectIdsCount + '\n' +
+      'Папок custom_favorite “KinoPUB: ...”: ' + (report.customTypesToRemove ? report.customTypesToRemove.length : 0) + '\n\n' +
+      'KinoPUB не изменяется. Продолжить?';
+    if (!confirmText(text)) { noty(lang('cleanup_cancelled')); return false; }
+    var ids = {}, i;
+    for (i = 0; i < report.suspectIds.length; i++) ids[String(report.suspectIds[i].id)] = true;
+    var fav = favoriteStorage();
+    var custom = customFavoriteStorage();
+    var removed = { book: 0, book_movie: 0, book_tv: 0, customFolders: 0, customItems: 0, favoriteCards: 0, customCards: 0 };
+    removed.book = removeIdsFromArray(fav.book, ids);
+    removed.book_movie = removeIdsFromArray(fav.book_movie, ids);
+    removed.book_tv = removeIdsFromArray(fav.book_tv, ids);
+    var types = custom.customTypes || {};
+    for (var typeName in types) if (types.hasOwnProperty(typeName) && typeName !== 'card' && String(typeName).indexOf('KinoPUB:') === 0) {
+      var uid = types[typeName];
+      if (custom[uid] && custom[uid].length) removed.customItems += custom[uid].length;
+      delete custom[uid];
+      delete types[typeName];
+      removed.customFolders++;
+    }
+    custom.customTypes = types;
+    if (fav.card && fav.card.length) {
+      for (i = fav.card.length - 1; i >= 0; i--) if (fav.card[i] && ids[String(fav.card[i].id)] && isOldSyncCard(fav.card[i])) { fav.card.splice(i, 1); removed.favoriteCards++; }
+    }
+    if (custom.customTypes && custom.customTypes.card && custom.customTypes.card.length) {
+      for (i = custom.customTypes.card.length - 1; i >= 0; i--) if (custom.customTypes.card[i] && ids[String(custom.customTypes.card[i].id)] && isOldSyncCard(custom.customTypes.card[i])) { custom.customTypes.card.splice(i, 1); removed.customCards++; }
+    }
+    storageSet('favorite', fav);
+    storageSet('custom_favorite', custom);
+    report.applied = true; report.appliedAt = nowIso(); report.removed = removed;
+    storageSet(KEY.cleanupReport, report);
+    setStatus(lang('cleanup_done') + ': book ' + removed.book + ', movie ' + removed.book_movie + ', tv ' + removed.book_tv + ', custom folders ' + removed.customFolders);
+    noty(lang('cleanup_done'));
+    return report;
   }
 
   function addParam(name, type, def, values, title, descr, onChange) {
     try {
       if (!window.Lampa || !Lampa.SettingsApi || !Lampa.SettingsApi.addParam) return;
       var param = { component: COMPONENT, name: name, type: type, 'default': def == null ? '' : def, values: values == null ? '' : values };
-      Lampa.SettingsApi.addParam({
-        component: COMPONENT,
-        param: param,
-        field: { name: title, description: descr || '' },
-        onChange: onChange || function () {}
-      });
+      Lampa.SettingsApi.addParam({ component: COMPONENT, param: param, field: { name: title, description: descr || '' }, onChange: onChange || function () {} });
     } catch (e) { log('settings param failed', name, e && e.message); }
   }
 
   function addSettings() {
     try {
       if (!window.Lampa || !Lampa.SettingsApi || !Lampa.SettingsApi.addComponent) return;
-      Lampa.SettingsApi.addComponent({
-        component: COMPONENT,
-        name: lang('component'),
-        icon: '<svg width="24" height="24" viewBox="0 0 24 24"><path fill="currentColor" d="M12 3a9 9 0 0 0-9 9h2a7 7 0 0 1 11.95-4.95L15 9h6V3l-2.62 2.62A8.97 8.97 0 0 0 12 3Zm7 9a7 7 0 0 1-11.95 4.95L9 15H3v6l2.62-2.62A9 9 0 0 0 21 12h-2Z"/></svg>'
-      });
-      addParam('kp_sync001_sep_main', 'title', '', '', lang('sep'), lang('sep_descr'));
+      Lampa.SettingsApi.addComponent({ component: COMPONENT, name: lang('component'), icon: '<svg width="24" height="24" viewBox="0 0 24 24"><path fill="currentColor" d="M12 3a9 9 0 0 0-9 9h2a7 7 0 0 1 11.95-4.95L15 9h6V3l-2.62 2.62A8.97 8.97 0 0 0 12 3Zm7 9a7 7 0 0 1-11.95 4.95L9 15H3v6l2.62-2.62A9 9 0 0 0 21 12h-2Z"/></svg>' });
+      addParam('kp_sync002_sep_main', 'title', '', '', lang('sep'), lang('sep_descr'));
       addParam(KEY.lastStatus, 'input', storageGet(KEY.lastStatus, '') || '', '', lang('status'), lang('status_descr'));
-      addParam('kp_sync001_action_check_token', 'button', '', '', lang('check_token'), lang('check_token_descr'), function () { checkToken(); });
-      addParam('kp_sync001_action_read_bookmarks', 'button', '', '', lang('read_bookmarks'), lang('read_bookmarks_descr'), function () { readBookmarks(); });
-      addParam('kp_sync001_action_show_report', 'button', '', '', lang('show_report'), lang('show_report_descr'), function () { showReport(); });
-      addParam('kp_sync001_action_copy_report', 'button', '', '', lang('copy_report'), lang('copy_report_descr'), function () { copyReport(); });
-      addParam('kp_sync001_action_clear_report', 'button', '', '', lang('clear_report'), lang('clear_report_descr'), function () { clearReport(); });
+      addParam('kp_sync002_action_check_token', 'button', '', '', lang('check_token'), lang('check_token_descr'), function () { checkToken(); });
+      addParam('kp_sync002_action_read_bookmarks', 'button', '', '', lang('read_bookmarks'), lang('read_bookmarks_descr'), function () { readBookmarks(); });
+      addParam('kp_sync002_action_show_report', 'button', '', '', lang('show_report'), lang('show_report_descr'), function () { showReport(); });
+      addParam('kp_sync002_action_copy_report', 'button', '', '', lang('copy_report'), lang('copy_report_descr'), function () { copyReport(); });
+      addParam('kp_sync002_action_clear_report', 'button', '', '', lang('clear_report'), lang('clear_report_descr'), function () { clearReport(); });
+      addParam('kp_sync002_sep_cleanup', 'title', '', '', lang('sep_cleanup'), lang('sep_cleanup_descr'));
+      addParam('kp_sync002_action_scan_bad_lampa', 'button', '', '', lang('scan_bad_lampa'), lang('scan_bad_lampa_descr'), function () { scanOldLampaBookmarks(); });
+      addParam('kp_sync002_action_show_cleanup', 'button', '', '', lang('show_cleanup'), lang('show_cleanup_descr'), function () { showCleanupReport(); });
+      addParam('kp_sync002_action_copy_cleanup', 'button', '', '', lang('copy_cleanup'), lang('copy_cleanup_descr'), function () { copyCleanupReport(); });
+      addParam('kp_sync002_action_clear_bad_lampa', 'button', '', '', lang('clear_bad_lampa'), lang('clear_bad_lampa_descr'), function () { applyOldLampaCleanup(); });
     } catch (e) { log('settings failed', e && e.message); }
   }
 
   function start() {
-    if (window.KinoPubSync001 && window.KinoPubSync001._started) return;
-    window.KinoPubSync001 = {
+    if (window.KinoPubSync002 && window.KinoPubSync002._started) return;
+    window.KinoPubSync002 = {
       _started: true,
       version: VERSION,
       edition: EDITION,
@@ -567,11 +706,17 @@
       showReport: showReport,
       copyReport: copyReport,
       clearReport: clearReport,
+      scanOldLampaBookmarks: scanOldLampaBookmarks,
+      cleanupReport: cleanupReport,
+      cleanupReportText: cleanupReportText,
+      showCleanupReport: showCleanupReport,
+      copyCleanupReport: copyCleanupReport,
+      applyOldLampaCleanup: applyOldLampaCleanup,
       status: function () { return storageGet(KEY.lastStatus, ''); },
       tokenStatus: function () { return storageGet(KEY.tokenStatus, null); }
     };
     addSettings();
-    log('started', 'read-only audit build');
+    log('started', 'read-only audit build with local Lampa cleanup tools');
   }
 
   if (window.appready) start();
