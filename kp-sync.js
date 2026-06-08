@@ -1,27 +1,30 @@
 (function () {
   'use strict';
 
-  var VERSION = '0.0.3';
+  var VERSION = '0.0.4';
   var EDITION = 'alpha-readonly';
   var COMPONENT = 'kp_sync_alpha';
-  var LOG = '[KinoPUB Sync 0.0.3]';
+  var LOG = '[KinoPUB Sync 0.0.4]';
   var API_HOST = 'https://api.service-kp.com';
   var CLIENT_ID = 'xbmc';
   var CLIENT_SECRET = 'cgg3gtifu46urtfp2zp1nqtba0k2ezxh';
   var MAX_PAGES_PER_FOLDER = 200;
   var PER_PAGE = 50;
   var REPORT_SAMPLE_LIMIT = 12;
+  var FALLBACK_MIN_RATIO = 0.8;
 
   var KEY = {
     token: 'kp_token',
     refresh: 'kp_refresh',
-    lastStatus: 'kp_sync003_last_status',
-    report: 'kp_sync003_bookmarks_report',
-    tokenStatus: 'kp_sync003_token_status',
-    cleanupReport: 'kp_sync003_lampa_cleanup_report'
+    lastStatus: 'kp_sync004_last_status',
+    report: 'kp_sync004_bookmarks_report',
+    tokenStatus: 'kp_sync004_token_status',
+    cleanupReport: 'kp_sync004_lampa_cleanup_report',
+    availabilityReport: 'kp_sync004_availability_report',
+    availabilityLimit: 'kp_sync004_availability_limit'
   };
 
-  if (window.KinoPubSync003 && window.KinoPubSync003.version === VERSION) return;
+  if (window.KinoPubSync004 && window.KinoPubSync004.version === VERSION) return;
 
   function nowIso() {
     try { return new Date().toISOString(); } catch (e) { return String(Date.now()); }
@@ -56,7 +59,7 @@
 
   function lang(key) {
     var ru = {
-      component: 'KinoPUB Sync 0.0.3',
+      component: 'KinoPUB Sync 0.0.4',
       sep: '— Проверка и чтение KinoPUB —',
       sep_descr: 'Тестовая read-only сборка. Ничего не импортирует в Lampa и ничего не меняет в KinoPUB.',
       sep_cleanup: '— Очистка следов старого Sync-импорта —',
@@ -67,6 +70,18 @@
       check_token_descr: 'Проверяет, есть ли kp_token/kp_refresh от основного lampa_kinopub, и доступен ли API KinoPUB. Отдельную авторизацию не запускает.',
       read_bookmarks: 'Считать папки и закладки KinoPUB',
       read_bookmarks_descr: 'Читает все доступные папки и элементы закладок авторизованного аккаунта KinoPUB. Ничего не записывает в Lampa.',
+      sep_availability: '— Проверка доступности карточек KinoPUB —',
+      sep_availability_descr: 'Read-only проверка детальных карточек через /v1/items/<id>?nolinks=1. Нужна для поиска Not Found (#404), пустых или проблемных карточек.',
+      availability_limit: 'Лимит проверки карточек',
+      availability_limit_descr: '0 — проверить все уникальные карточки из последнего отчёта. Можно указать 50/100 для короткого теста.',
+      check_availability: 'Проверить доступность карточек KinoPUB',
+      check_availability_descr: 'Проверяет уникальные item id из последнего отчёта чтения через /v1/items/<id>?nolinks=1 и формирует отдельный отчёт с проблемными карточками и ссылками.',
+      show_availability: 'Показать отчёт доступности',
+      show_availability_descr: 'Показывает краткую сводку последней проверки доступности карточек.',
+      copy_availability: 'Скопировать отчёт доступности',
+      copy_availability_descr: 'Копирует JSON-отчёт по доступности карточек, включая проблемные item id и ссылки.',
+      clear_availability: 'Очистить отчёт доступности',
+      clear_availability_descr: 'Удаляет только отчёт проверки доступности карточек.',
       show_report: 'Показать краткий отчёт',
       show_report_descr: 'Открывает краткую сводку последнего чтения папок и закладок.',
       copy_report: 'Скопировать полный отчёт',
@@ -89,6 +104,11 @@
       report_missing: 'Отчёт ещё не сформирован.',
       cleanup_missing: 'Отчёт очистки ещё не сформирован.',
       report_cleared: 'Отчёт очищен.',
+      availability_missing: 'Отчёт доступности ещё не сформирован.',
+      availability_need_report: 'Сначала сформируйте отчёт чтения папок и закладок.',
+      availability_checking: 'Проверяю доступность карточек KinoPUB...',
+      availability_done: 'Проверка доступности завершена',
+      availability_cleared: 'Отчёт доступности очищен.',
       copied: 'Отчёт скопирован.',
       copy_failed: 'Не удалось скопировать автоматически. Открыл текст отчёта.',
       done: 'Чтение завершено',
@@ -116,6 +136,12 @@
   function storageRemove(key) {
     try { if (window.Lampa && Lampa.Storage && Lampa.Storage.set) { Lampa.Storage.set(key, ''); return; } } catch (e) {}
     try { localStorage.removeItem(key); } catch (e2) {}
+  }
+
+  function getInt(key, def) {
+    var v = storageGet(key, def);
+    var n = parseInt(v, 10);
+    return isNaN(n) ? def : n;
   }
 
   function setStatus(text) {
@@ -431,8 +457,10 @@
     for (var si = 0; si < strategies.length; si++) {
       (function (strategy, index) {
         chain = chain.then(function () {
-          if (index > 0 && best && expected && best.rawRowsFetched >= expected) return null;
-          if (index > 0 && best && !expected && best.rawRowsFetched > 0) return null;
+          if (index > 0 && best && !best.error) {
+            if (expected && best.rawRowsFetched >= Math.max(1, Math.floor(expected * FALLBACK_MIN_RATIO))) return null;
+            if (!expected && best.rawRowsFetched > 0) return null;
+          }
           return readFolderAttempt(folder, strategy).then(function (attempt) { attempts.push(attempt); best = betterAttempt(best, attempt); });
         });
       })(strategies[si], si);
@@ -523,7 +551,7 @@
       if (report.warnings.length > 12) lines.push('- ... ещё ' + (report.warnings.length - 12));
       lines.push('');
     }
-    lines.push('Важно: v0.0.3 ничего не импортирует в Lampa и ничего не меняет в KinoPUB. Локальная очистка Lampa выполняется только отдельной кнопкой и только после подтверждения.');
+    lines.push('Важно: v0.0.4 ничего не импортирует в Lampa и ничего не меняет в KinoPUB. Проверка доступности и очистка Lampa выполняются только отдельными кнопками.');
     return lines.join('\n');
   }
 
@@ -538,7 +566,7 @@
       source: 'KinoPUB API bookmarks read-only audit',
       warnings: [],
       token: { accessTokenPresent: !!tokenAccess(), refreshTokenPresent: !!tokenRefresh(), tokensIncluded: false },
-      api: { host: API_HOST, endpoints: ['/v1/bookmarks', '/v1/bookmarks/<folder_id>', '/v1/bookmarks/view?folder=<folder_id>', 'pagination: page + perpage=50'] },
+      api: { host: API_HOST, endpoints: ['/v1/bookmarks', '/v1/bookmarks/<folder_id>', '/v1/bookmarks/view?folder=<folder_id> fallback only if main read is incomplete', 'pagination: page + perpage=50'] },
       folders: [],
       catalog: [],
       rawSamples: [],
@@ -583,9 +611,194 @@
 
   function getReport() { return storageGet(KEY.report, null); }
   function reportText() { var r = getReport(); return r ? JSON.stringify(r, null, 2) : lang('report_missing'); }
-  function showReport() { var r = getReport(); if (!r) { noty(lang('report_missing')); return; } showText('KinoPUB Sync 0.0.3', r.summaryText || reportText()); }
-  function copyReport() { var text = reportText(); return copyText(text).then(function () { noty(lang('copied')); }).catch(function () { noty(lang('copy_failed')); showText('KinoPUB Sync 0.0.3 — отчёт', text); }); }
+  function showReport() { var r = getReport(); if (!r) { noty(lang('report_missing')); return; } showText('KinoPUB Sync 0.0.4', r.summaryText || reportText()); }
+  function copyReport() { var text = reportText(); return copyText(text).then(function () { noty(lang('copied')); }).catch(function () { noty(lang('copy_failed')); showText('KinoPUB Sync 0.0.4 — отчёт', text); }); }
   function clearReport() { storageRemove(KEY.report); storageRemove(KEY.tokenStatus); storageSet(KEY.lastStatus, ''); noty(lang('report_cleared')); }
+
+  function padImdb(id) {
+    var s = String(id || '').replace(/^tt/i, '').replace(/[^0-9]/g, '');
+    while (s.length && s.length < 7) s = '0' + s;
+    return s ? 'tt' + s : '';
+  }
+
+  function itemLinks(norm) {
+    var imdb = padImdb(norm && norm.imdb_id);
+    var kp = String(norm && norm.kinopoisk_id || '').replace(/[^0-9]/g, '');
+    var kind = String(norm && norm.normalized_kind || '').toLowerCase();
+    return {
+      kinopub: norm && norm.id ? 'https://kino.pub/item/view/' + encodeURIComponent(String(norm.id)) : '',
+      imdb: imdb ? 'https://www.imdb.com/title/' + imdb + '/' : '',
+      kinopoisk: kp ? 'https://www.kinopoisk.ru/' + (kind === 'tv' ? 'series' : 'film') + '/' + kp + '/' : ''
+    };
+  }
+
+  function firstObjectFromDetail(json) {
+    json = parseJson(json);
+    if (!json) return {};
+    if (isObject(json.item)) return json.item;
+    if (isObject(json.data)) {
+      if (isObject(json.data.item)) return json.data.item;
+      return json.data;
+    }
+    if (isObject(json.result)) {
+      if (isObject(json.result.item)) return json.result.item;
+      return json.result;
+    }
+    return isObject(json) ? json : {};
+  }
+
+  function hasArrayWithItems(obj, keys) {
+    if (!obj) return false;
+    for (var i = 0; i < keys.length; i++) {
+      var v = obj[keys[i]];
+      if (isArray(v) && v.length > 0) return true;
+    }
+    return false;
+  }
+
+  function detailMediaInfo(json) {
+    var obj = firstObjectFromDetail(json);
+    var places = [json, obj];
+    if (json && isObject(json.data)) places.push(json.data);
+    if (json && isObject(json.result)) places.push(json.result);
+    var hasVideos = false, hasSeasons = false, hasEpisodes = false;
+    for (var i = 0; i < places.length; i++) {
+      if (hasArrayWithItems(places[i], ['videos', 'video', 'files', 'playlist', 'tracklist'])) hasVideos = true;
+      if (hasArrayWithItems(places[i], ['seasons', 'season'])) hasSeasons = true;
+      if (hasArrayWithItems(places[i], ['episodes', 'episode'])) hasEpisodes = true;
+    }
+    return {
+      hasDetailObject: !!(obj && (obj.id != null || obj.title || obj.type)),
+      hasVideos: hasVideos,
+      hasSeasons: hasSeasons,
+      hasEpisodes: hasEpisodes,
+      hasMedia: hasVideos || hasSeasons || hasEpisodes,
+      detailKeys: obj && typeof obj === 'object' ? Object.keys(obj).sort().slice(0, 80) : []
+    };
+  }
+
+  function availabilityProblemEntry(norm, status, reason, err, media) {
+    var links = itemLinks(norm);
+    var folders = norm && norm.folders ? norm.folders : [{ id: norm.folder_id || '', title: norm.folder_title || '' }];
+    return {
+      id: String(norm && norm.id || ''),
+      title: String(norm && norm.title || ''),
+      type: String(norm && norm.type || ''),
+      subtype: String(norm && norm.subtype || ''),
+      normalized_kind: String(norm && norm.normalized_kind || ''),
+      year: String(norm && norm.year || ''),
+      imdb_id: String(norm && norm.imdb_id || ''),
+      kinopoisk_id: String(norm && norm.kinopoisk_id || ''),
+      tmdb_id: String(norm && norm.tmdb_id || ''),
+      folders: folders,
+      status: status,
+      reason: reason || '',
+      httpStatus: err && err.http || 0,
+      message: err && err.message || '',
+      media: media || null,
+      links: links
+    };
+  }
+
+  function buildAvailabilitySummary(report) {
+    var lines = [];
+    lines.push('KinoPUB Sync v' + VERSION + ' — отчёт доступности карточек');
+    lines.push('Дата: ' + report.generatedAt);
+    lines.push('Источник: последний отчёт чтения от ' + (report.basedOnBookmarksReportAt || ''));
+    lines.push('Проверено: ' + report.stats.checked + ' / ' + report.stats.total);
+    lines.push('OK: ' + report.stats.ok);
+    lines.push('Not Found / 404: ' + report.stats.notFound);
+    lines.push('Без явной media-структуры: ' + report.stats.noMedia);
+    lines.push('API/network errors: ' + report.stats.apiError);
+    lines.push('Пропущено: ' + report.stats.skipped);
+    lines.push('Проблемных карточек: ' + report.problemItems.length);
+    if (report.problemItems.length) {
+      lines.push('');
+      lines.push('Первые проблемные карточки:');
+      for (var i = 0; i < report.problemItems.length && i < 20; i++) {
+        var it = report.problemItems[i];
+        lines.push('- [' + it.status + '] ' + it.title + ' — ' + it.links.kinopub);
+      }
+    }
+    return lines.join('\n');
+  }
+
+  function availabilityReport() { return storageGet(KEY.availabilityReport, null); }
+  function availabilityReportText() { var r = availabilityReport(); return r ? JSON.stringify(r, null, 2) : lang('availability_missing'); }
+  function showAvailabilityReport() { var r = availabilityReport(); if (!r) { noty(lang('availability_missing')); return; } showText('KinoPUB Sync 0.0.4 — доступность карточек', r.summaryText || JSON.stringify(r, null, 2)); }
+  function copyAvailabilityReport() { var text = availabilityReportText(); return copyText(text).then(function () { noty(lang('copied')); }).catch(function () { noty(lang('copy_failed')); showText('KinoPUB Sync 0.0.4 — доступность карточек', text); }); }
+  function clearAvailabilityReport() { storageRemove(KEY.availabilityReport); noty(lang('availability_cleared')); }
+
+  function checkOneAvailability(norm, index, total) {
+    if (!norm || !norm.id) return Promise.resolve({ status: 'skipped', reason: 'no_item_id' });
+    if (index === 1 || index % 10 === 0 || index === total) setStatus(lang('availability_checking') + ' ' + index + '/' + total);
+    return apiGet('/items/' + encodeURIComponent(String(norm.id)), { nolinks: 1 }).then(function (json) {
+      var media = detailMediaInfo(json);
+      if (!media.hasDetailObject) return { status: 'api_error', reason: 'empty_or_unexpected_detail_response', error: { http: 0, message: 'empty_or_unexpected_detail_response' }, media: media };
+      if (!media.hasMedia) return { status: 'no_media', reason: 'detail_exists_but_no_videos_seasons_or_episodes_detected', media: media };
+      return { status: 'ok', reason: 'detail_exists_and_media_structure_detected', media: media };
+    }).catch(function (err) {
+      var e = errorSummary(err);
+      var status = e.http === 404 ? 'not_found' : 'api_error';
+      return { status: status, reason: status === 'not_found' ? 'GET /v1/items/<id> returned HTTP 404' : 'GET /v1/items/<id> failed', error: e, media: null };
+    });
+  }
+
+  function checkAvailability() {
+    var source = getReport();
+    if (!source || !source.uniqueItems) { noty(lang('availability_need_report')); return Promise.resolve(false); }
+    var all = [];
+    for (var k in source.uniqueItems) if (source.uniqueItems.hasOwnProperty(k)) all.push(source.uniqueItems[k]);
+    all.sort(function (a, b) { return String(a.title || '').localeCompare(String(b.title || '')); });
+    var limit = getInt(KEY.availabilityLimit, 0);
+    var list = limit > 0 ? all.slice(0, limit) : all;
+    var report = {
+      version: VERSION,
+      edition: EDITION,
+      generatedAt: nowIso(),
+      basedOnBookmarksReportAt: source.generatedAt || '',
+      source: 'KinoPUB API item availability read-only audit',
+      token: { accessTokenPresent: !!tokenAccess(), refreshTokenPresent: !!tokenRefresh(), tokensIncluded: false },
+      api: { host: API_HOST, endpoints: ['/v1/items/<item_id>?nolinks=1'], webLinkPattern: 'https://kino.pub/item/view/<item_id>' },
+      mode: { requestedTotal: all.length, checkedTotal: list.length, limit: limit, note: '0 means all unique items from the last bookmarks report' },
+      stats: { total: list.length, checked: 0, ok: 0, notFound: 0, noMedia: 0, apiError: 0, skipped: Math.max(0, all.length - list.length) },
+      problemItems: [],
+      checkedSamples: []
+    };
+    noty(lang('availability_checking'));
+    setStatus(lang('availability_checking') + ' 0/' + list.length);
+    var chain = Promise.resolve();
+    for (var i = 0; i < list.length; i++) {
+      (function (norm, idx) {
+        chain = chain.then(function () {
+          return checkOneAvailability(norm, idx + 1, list.length).then(function (res) {
+            report.stats.checked++;
+            if (res.status === 'ok') report.stats.ok++;
+            else if (res.status === 'not_found') report.stats.notFound++;
+            else if (res.status === 'no_media') report.stats.noMedia++;
+            else if (res.status === 'skipped') report.stats.skipped++;
+            else report.stats.apiError++;
+            if (res.status !== 'ok') report.problemItems.push(availabilityProblemEntry(norm, res.status, res.reason, res.error, res.media));
+            else if (report.checkedSamples.length < 20) report.checkedSamples.push({ id: norm.id, title: norm.title, status: 'ok', links: itemLinks(norm), media: res.media });
+          });
+        });
+      })(list[i], i);
+    }
+    return chain.then(function () {
+      report.summaryText = buildAvailabilitySummary(report);
+      storageSet(KEY.availabilityReport, report);
+      setStatus(lang('availability_done') + ': OK ' + report.stats.ok + ', 404 ' + report.stats.notFound + ', noMedia ' + report.stats.noMedia + ', errors ' + report.stats.apiError);
+      noty(lang('availability_done'));
+      return report;
+    }).catch(function (err) {
+      report.error = errorSummary(err);
+      report.summaryText = buildAvailabilitySummary(report);
+      storageSet(KEY.availabilityReport, report);
+      setStatus('Ошибка проверки доступности: ' + report.error.message);
+      noty('Ошибка проверки доступности');
+      return report;
+    });
+  }
 
   function favoriteStorage() { var fav = storageGet('favorite', {}) || {}; if (typeof fav === 'string') fav = parseJson(fav) || {}; return fav && typeof fav === 'object' ? fav : {}; }
   function customFavoriteStorage() { var fav = storageGet('custom_favorite', {}) || {}; if (typeof fav === 'string') fav = parseJson(fav) || {}; return fav && typeof fav === 'object' ? fav : {}; }
@@ -654,8 +867,8 @@
   function countIdsInArray(arr, ids) { var n = 0; for (var i = 0; arr && i < arr.length; i++) if (ids[String(arr[i])]) n++; return n; }
   function cleanupReport() { return storageGet(KEY.cleanupReport, null); }
   function cleanupReportText() { var r = cleanupReport(); return r ? JSON.stringify(r, null, 2) : lang('cleanup_missing'); }
-  function showCleanupReport() { var r = cleanupReport(); if (!r) { noty(lang('cleanup_missing')); return; } showText('KinoPUB Sync 0.0.3 — очистка Lampa', JSON.stringify(r, null, 2)); }
-  function copyCleanupReport() { var text = cleanupReportText(); return copyText(text).then(function () { noty(lang('copied')); }).catch(function () { noty(lang('copy_failed')); showText('KinoPUB Sync 0.0.3 — очистка Lampa', text); }); }
+  function showCleanupReport() { var r = cleanupReport(); if (!r) { noty(lang('cleanup_missing')); return; } showText('KinoPUB Sync 0.0.4 — очистка Lampa', JSON.stringify(r, null, 2)); }
+  function copyCleanupReport() { var text = cleanupReportText(); return copyText(text).then(function () { noty(lang('copied')); }).catch(function () { noty(lang('copy_failed')); showText('KinoPUB Sync 0.0.4 — очистка Lampa', text); }); }
 
   function applyOldLampaCleanup() {
     var report = cleanupReport();
@@ -710,24 +923,30 @@
     try {
       if (!window.Lampa || !Lampa.SettingsApi || !Lampa.SettingsApi.addComponent) return;
       Lampa.SettingsApi.addComponent({ component: COMPONENT, name: lang('component'), icon: '<svg width="24" height="24" viewBox="0 0 24 24"><path fill="currentColor" d="M12 3a9 9 0 0 0-9 9h2a7 7 0 0 1 11.95-4.95L15 9h6V3l-2.62 2.62A8.97 8.97 0 0 0 12 3Zm7 9a7 7 0 0 1-11.95 4.95L9 15H3v6l2.62-2.62A9 9 0 0 0 21 12h-2Z"/></svg>' });
-      addParam('kp_sync003_sep_main', 'title', '', '', lang('sep'), lang('sep_descr'));
+      addParam('kp_sync004_sep_main', 'title', '', '', lang('sep'), lang('sep_descr'));
       addParam(KEY.lastStatus, 'input', storageGet(KEY.lastStatus, '') || '', '', lang('status'), lang('status_descr'));
-      addParam('kp_sync003_action_check_token', 'button', '', '', lang('check_token'), lang('check_token_descr'), function () { checkToken(); });
-      addParam('kp_sync003_action_read_bookmarks', 'button', '', '', lang('read_bookmarks'), lang('read_bookmarks_descr'), function () { readBookmarks(); });
-      addParam('kp_sync003_action_show_report', 'button', '', '', lang('show_report'), lang('show_report_descr'), function () { showReport(); });
-      addParam('kp_sync003_action_copy_report', 'button', '', '', lang('copy_report'), lang('copy_report_descr'), function () { copyReport(); });
-      addParam('kp_sync003_action_clear_report', 'button', '', '', lang('clear_report'), lang('clear_report_descr'), function () { clearReport(); });
-      addParam('kp_sync003_sep_cleanup', 'title', '', '', lang('sep_cleanup'), lang('sep_cleanup_descr'));
-      addParam('kp_sync003_action_scan_bad_lampa', 'button', '', '', lang('scan_bad_lampa'), lang('scan_bad_lampa_descr'), function () { scanOldLampaBookmarks(); });
-      addParam('kp_sync003_action_show_cleanup', 'button', '', '', lang('show_cleanup'), lang('show_cleanup_descr'), function () { showCleanupReport(); });
-      addParam('kp_sync003_action_copy_cleanup', 'button', '', '', lang('copy_cleanup'), lang('copy_cleanup_descr'), function () { copyCleanupReport(); });
-      addParam('kp_sync003_action_clear_bad_lampa', 'button', '', '', lang('clear_bad_lampa'), lang('clear_bad_lampa_descr'), function () { applyOldLampaCleanup(); });
+      addParam('kp_sync004_action_check_token', 'button', '', '', lang('check_token'), lang('check_token_descr'), function () { checkToken(); });
+      addParam('kp_sync004_action_read_bookmarks', 'button', '', '', lang('read_bookmarks'), lang('read_bookmarks_descr'), function () { readBookmarks(); });
+      addParam('kp_sync004_action_show_report', 'button', '', '', lang('show_report'), lang('show_report_descr'), function () { showReport(); });
+      addParam('kp_sync004_action_copy_report', 'button', '', '', lang('copy_report'), lang('copy_report_descr'), function () { copyReport(); });
+      addParam('kp_sync004_action_clear_report', 'button', '', '', lang('clear_report'), lang('clear_report_descr'), function () { clearReport(); });
+      addParam('kp_sync004_sep_availability', 'title', '', '', lang('sep_availability'), lang('sep_availability_descr'));
+      addParam(KEY.availabilityLimit, 'input', storageGet(KEY.availabilityLimit, 0) || 0, '', lang('availability_limit'), lang('availability_limit_descr'));
+      addParam('kp_sync004_action_check_availability', 'button', '', '', lang('check_availability'), lang('check_availability_descr'), function () { checkAvailability(); });
+      addParam('kp_sync004_action_show_availability', 'button', '', '', lang('show_availability'), lang('show_availability_descr'), function () { showAvailabilityReport(); });
+      addParam('kp_sync004_action_copy_availability', 'button', '', '', lang('copy_availability'), lang('copy_availability_descr'), function () { copyAvailabilityReport(); });
+      addParam('kp_sync004_action_clear_availability', 'button', '', '', lang('clear_availability'), lang('clear_availability_descr'), function () { clearAvailabilityReport(); });
+      addParam('kp_sync004_sep_cleanup', 'title', '', '', lang('sep_cleanup'), lang('sep_cleanup_descr'));
+      addParam('kp_sync004_action_scan_bad_lampa', 'button', '', '', lang('scan_bad_lampa'), lang('scan_bad_lampa_descr'), function () { scanOldLampaBookmarks(); });
+      addParam('kp_sync004_action_show_cleanup', 'button', '', '', lang('show_cleanup'), lang('show_cleanup_descr'), function () { showCleanupReport(); });
+      addParam('kp_sync004_action_copy_cleanup', 'button', '', '', lang('copy_cleanup'), lang('copy_cleanup_descr'), function () { copyCleanupReport(); });
+      addParam('kp_sync004_action_clear_bad_lampa', 'button', '', '', lang('clear_bad_lampa'), lang('clear_bad_lampa_descr'), function () { applyOldLampaCleanup(); });
     } catch (e) { log('settings failed', e && e.message); }
   }
 
   function start() {
-    if (window.KinoPubSync003 && window.KinoPubSync003._started) return;
-    window.KinoPubSync003 = {
+    if (window.KinoPubSync004 && window.KinoPubSync004._started) return;
+    window.KinoPubSync004 = {
       _started: true,
       version: VERSION,
       edition: EDITION,
@@ -738,6 +957,12 @@
       showReport: showReport,
       copyReport: copyReport,
       clearReport: clearReport,
+      checkAvailability: checkAvailability,
+      availabilityReport: availabilityReport,
+      availabilityReportText: availabilityReportText,
+      showAvailabilityReport: showAvailabilityReport,
+      copyAvailabilityReport: copyAvailabilityReport,
+      clearAvailabilityReport: clearAvailabilityReport,
       scanOldLampaBookmarks: scanOldLampaBookmarks,
       cleanupReport: cleanupReport,
       cleanupReportText: cleanupReportText,
