@@ -1,27 +1,27 @@
 (function () {
   'use strict';
 
-  var VERSION = '0.0.2';
+  var VERSION = '0.0.3';
   var EDITION = 'alpha-readonly';
   var COMPONENT = 'kp_sync_alpha';
-  var LOG = '[KinoPUB Sync 0.0.2]';
+  var LOG = '[KinoPUB Sync 0.0.3]';
   var API_HOST = 'https://api.service-kp.com';
   var CLIENT_ID = 'xbmc';
   var CLIENT_SECRET = 'cgg3gtifu46urtfp2zp1nqtba0k2ezxh';
-  var MAX_PAGES_PER_FOLDER = 80;
-  var PER_PAGE = 100;
+  var MAX_PAGES_PER_FOLDER = 200;
+  var PER_PAGE = 50;
   var REPORT_SAMPLE_LIMIT = 12;
 
   var KEY = {
     token: 'kp_token',
     refresh: 'kp_refresh',
-    lastStatus: 'kp_sync002_last_status',
-    report: 'kp_sync002_bookmarks_report',
-    tokenStatus: 'kp_sync002_token_status',
-    cleanupReport: 'kp_sync002_lampa_cleanup_report'
+    lastStatus: 'kp_sync003_last_status',
+    report: 'kp_sync003_bookmarks_report',
+    tokenStatus: 'kp_sync003_token_status',
+    cleanupReport: 'kp_sync003_lampa_cleanup_report'
   };
 
-  if (window.KinoPubSync002 && window.KinoPubSync002.version === VERSION) return;
+  if (window.KinoPubSync003 && window.KinoPubSync003.version === VERSION) return;
 
   function nowIso() {
     try { return new Date().toISOString(); } catch (e) { return String(Date.now()); }
@@ -56,7 +56,7 @@
 
   function lang(key) {
     var ru = {
-      component: 'KinoPUB Sync 0.0.2',
+      component: 'KinoPUB Sync 0.0.3',
       sep: '— Проверка и чтение KinoPUB —',
       sep_descr: 'Тестовая read-only сборка. Ничего не импортирует в Lampa и ничего не меняет в KinoPUB.',
       sep_cleanup: '— Очистка следов старого Sync-импорта —',
@@ -343,25 +343,27 @@
   function folderId(folder) { return folder && folder.id != null ? String(folder.id) : ''; }
   function folderTitle(folder) { return String((folder && (folder.title || folder.name)) || 'Без названия'); }
 
-  function makeStrategy(name, path, paramsBuilder) { return { name: name, path: path, paramsBuilder: paramsBuilder }; }
-
   function strategyList(fid) {
     return [
-      makeStrategy('path_page_perpage', '/bookmarks/' + encodeURIComponent(fid), function (page) { return { page: page, perpage: PER_PAGE }; }),
-      makeStrategy('view_folder_page_perpage', '/bookmarks/view', function (page) { return { folder: fid, page: page, perpage: PER_PAGE }; }),
-      makeStrategy('path_page_limit', '/bookmarks/' + encodeURIComponent(fid), function (page) { return { page: page, limit: PER_PAGE }; })
+      makeStrategy('path_page_perpage_50', '/bookmarks/' + encodeURIComponent(fid), function (page) { return { page: page, perpage: PER_PAGE }; }, PER_PAGE),
+      makeStrategy('view_folder_page_perpage_50', '/bookmarks/view', function (page) { return { folder: fid, page: page, perpage: PER_PAGE }; }, PER_PAGE),
+      makeStrategy('path_page_limit_50', '/bookmarks/' + encodeURIComponent(fid), function (page) { return { page: page, limit: PER_PAGE }; }, PER_PAGE)
     ];
   }
 
+  function makeStrategy(name, path, paramsBuilder, requestedPerPage) { return { name: name, path: path, paramsBuilder: paramsBuilder, requestedPerPage: requestedPerPage || PER_PAGE }; }
+
   function readFolderAttempt(folder, strategy) {
     var fid = folderId(folder), ftitle = folderTitle(folder), expected = Number(folder && folder.count) || 0;
-    var attempt = { strategy: strategy.name, expectedRows: expected, pagesRequested: 0, rawRowsFetched: 0, uniqueItems: 0, duplicateRows: 0, stoppedReason: '', error: null, pageTrace: [], rows: [], seen: {} };
+    var requestedPerPage = Number(strategy.requestedPerPage || PER_PAGE) || PER_PAGE;
+    var attempt = { strategy: strategy.name, expectedRows: expected, requestedPerPage: requestedPerPage, inferredPageSize: 0, pagesRequested: 0, rawRowsFetched: 0, uniqueItems: 0, duplicateRows: 0, stoppedReason: '', error: null, pageTrace: [], rows: [], seen: {}, noNewPages: 0 };
     var page = 1;
     function readNext() {
       if (page > MAX_PAGES_PER_FOLDER) { attempt.stoppedReason = 'max_pages_guard'; return Promise.resolve(attempt); }
       attempt.pagesRequested++;
       return apiGet(strategy.path, strategy.paramsBuilder(page)).then(function (json) {
-        var items = asArray(json), newUnique = 0, duplicateRows = 0, firstId = '', lastId = '';
+        var items = asArray(json), newUnique = 0, duplicateRows = 0, firstId = '', lastId = '', continueReason = '';
+        if (!attempt.inferredPageSize && items.length) attempt.inferredPageSize = items.length;
         for (var i = 0; i < items.length; i++) {
           var rawId = itemId(items[i]) || ('no_id:' + fid + ':' + strategy.name + ':' + page + ':' + i);
           if (!firstId) firstId = rawId;
@@ -373,16 +375,44 @@
           if (!attempt.seen[norm.id]) { attempt.seen[norm.id] = true; attempt.uniqueItems++; newUnique++; }
           else { attempt.duplicateRows++; duplicateRows++; }
         }
-        attempt.pageTrace.push({ strategy: strategy.name, page: page, itemsReturned: items.length, newUniqueItems: newUnique, duplicateRows: duplicateRows, firstId: firstId, lastId: lastId });
-        if (!items.length) { attempt.stoppedReason = page === 1 ? 'empty_folder' : 'empty_page'; return attempt; }
-        if (expected && attempt.rawRowsFetched >= expected) { attempt.stoppedReason = 'reported_raw_count_reached'; return attempt; }
-        if (page > 1 && newUnique === 0) { attempt.stoppedReason = 'no_new_items_page_maybe_ignored'; return attempt; }
-        if (items.length < PER_PAGE) { attempt.stoppedReason = 'short_page'; return attempt; }
+
+        if (!items.length) {
+          attempt.stoppedReason = page === 1 ? 'empty_folder' : 'empty_page';
+          continueReason = 'stop_empty_page';
+          attempt.pageTrace.push({ strategy: strategy.name, page: page, requestedPerPage: requestedPerPage, inferredPageSize: attempt.inferredPageSize || 0, itemsReturned: items.length, newUniqueItems: newUnique, duplicateRows: duplicateRows, rawRowsFetchedTotal: attempt.rawRowsFetched, firstId: firstId, lastId: lastId, continueReason: continueReason });
+          return attempt;
+        }
+
+        if (expected && attempt.rawRowsFetched >= expected) {
+          attempt.stoppedReason = 'reported_raw_count_reached';
+          continueReason = 'stop_reported_count_reached';
+          attempt.pageTrace.push({ strategy: strategy.name, page: page, requestedPerPage: requestedPerPage, inferredPageSize: attempt.inferredPageSize || items.length, itemsReturned: items.length, newUniqueItems: newUnique, duplicateRows: duplicateRows, rawRowsFetchedTotal: attempt.rawRowsFetched, firstId: firstId, lastId: lastId, continueReason: continueReason });
+          return attempt;
+        }
+
+        if (page > 1 && newUnique === 0) attempt.noNewPages++;
+        else attempt.noNewPages = 0;
+        if (attempt.noNewPages >= 1) {
+          attempt.stoppedReason = 'no_new_items_page_maybe_ignored';
+          continueReason = 'stop_no_new_unique_items';
+          attempt.pageTrace.push({ strategy: strategy.name, page: page, requestedPerPage: requestedPerPage, inferredPageSize: attempt.inferredPageSize || items.length, itemsReturned: items.length, newUniqueItems: newUnique, duplicateRows: duplicateRows, rawRowsFetchedTotal: attempt.rawRowsFetched, firstId: firstId, lastId: lastId, continueReason: continueReason });
+          return attempt;
+        }
+
+        if (!expected && items.length < requestedPerPage) {
+          attempt.stoppedReason = 'short_page_no_reported_count';
+          continueReason = 'stop_short_page_without_reported_count';
+          attempt.pageTrace.push({ strategy: strategy.name, page: page, requestedPerPage: requestedPerPage, inferredPageSize: attempt.inferredPageSize || items.length, itemsReturned: items.length, newUniqueItems: newUnique, duplicateRows: duplicateRows, rawRowsFetchedTotal: attempt.rawRowsFetched, firstId: firstId, lastId: lastId, continueReason: continueReason });
+          return attempt;
+        }
+
+        continueReason = expected ? 'continue_until_reported_count_or_empty_page' : 'continue_until_short_or_empty_page';
+        attempt.pageTrace.push({ strategy: strategy.name, page: page, requestedPerPage: requestedPerPage, inferredPageSize: attempt.inferredPageSize || items.length, itemsReturned: items.length, newUniqueItems: newUnique, duplicateRows: duplicateRows, rawRowsFetchedTotal: attempt.rawRowsFetched, firstId: firstId, lastId: lastId, continueReason: continueReason });
         page++;
         return readNext();
       }).catch(function (err) { attempt.error = errorSummary(err); attempt.stoppedReason = 'error'; return attempt; });
     }
-    return readNext().then(function (a) { delete a.seen; return a; });
+    return readNext().then(function (a) { delete a.seen; delete a.noNewPages; return a; });
   }
 
   function betterAttempt(a, b) {
@@ -414,6 +444,8 @@
         title: ftitle,
         countReported: expected,
         selectedStrategy: best.strategy,
+        requestedPerPage: best.requestedPerPage || PER_PAGE,
+        inferredPageSize: best.inferredPageSize || 0,
         pagesRequested: best.pagesRequested,
         rawRowsFetched: best.rawRowsFetched,
         itemsFetched: best.rawRowsFetched,
@@ -426,7 +458,7 @@
         attempts: [],
         pageTrace: best.pageTrace || []
       };
-      for (var ai = 0; ai < attempts.length; ai++) folderReport.attempts.push({ strategy: attempts[ai].strategy, pagesRequested: attempts[ai].pagesRequested, rawRowsFetched: attempts[ai].rawRowsFetched, uniqueItems: attempts[ai].uniqueItems, duplicateRows: attempts[ai].duplicateRows, stoppedReason: attempts[ai].stoppedReason, error: attempts[ai].error });
+      for (var ai = 0; ai < attempts.length; ai++) folderReport.attempts.push({ strategy: attempts[ai].strategy, requestedPerPage: attempts[ai].requestedPerPage || PER_PAGE, inferredPageSize: attempts[ai].inferredPageSize || 0, pagesRequested: attempts[ai].pagesRequested, rawRowsFetched: attempts[ai].rawRowsFetched, uniqueItems: attempts[ai].uniqueItems, duplicateRows: attempts[ai].duplicateRows, stoppedReason: attempts[ai].stoppedReason, error: attempts[ai].error });
 
       var seenInFolder = {};
       for (var r = 0; r < best.rows.length; r++) {
@@ -491,7 +523,7 @@
       if (report.warnings.length > 12) lines.push('- ... ещё ' + (report.warnings.length - 12));
       lines.push('');
     }
-    lines.push('Важно: v0.0.2 ничего не импортирует в Lampa и ничего не меняет в KinoPUB. Локальная очистка Lampa выполняется только отдельной кнопкой и только после подтверждения.');
+    lines.push('Важно: v0.0.3 ничего не импортирует в Lampa и ничего не меняет в KinoPUB. Локальная очистка Lampa выполняется только отдельной кнопкой и только после подтверждения.');
     return lines.join('\n');
   }
 
@@ -506,7 +538,7 @@
       source: 'KinoPUB API bookmarks read-only audit',
       warnings: [],
       token: { accessTokenPresent: !!tokenAccess(), refreshTokenPresent: !!tokenRefresh(), tokensIncluded: false },
-      api: { host: API_HOST, endpoints: ['/v1/bookmarks', '/v1/bookmarks/<folder_id>', '/v1/bookmarks/view?folder=<folder_id>'] },
+      api: { host: API_HOST, endpoints: ['/v1/bookmarks', '/v1/bookmarks/<folder_id>', '/v1/bookmarks/view?folder=<folder_id>', 'pagination: page + perpage=50'] },
       folders: [],
       catalog: [],
       rawSamples: [],
@@ -551,8 +583,8 @@
 
   function getReport() { return storageGet(KEY.report, null); }
   function reportText() { var r = getReport(); return r ? JSON.stringify(r, null, 2) : lang('report_missing'); }
-  function showReport() { var r = getReport(); if (!r) { noty(lang('report_missing')); return; } showText('KinoPUB Sync 0.0.2', r.summaryText || reportText()); }
-  function copyReport() { var text = reportText(); return copyText(text).then(function () { noty(lang('copied')); }).catch(function () { noty(lang('copy_failed')); showText('KinoPUB Sync 0.0.2 — отчёт', text); }); }
+  function showReport() { var r = getReport(); if (!r) { noty(lang('report_missing')); return; } showText('KinoPUB Sync 0.0.3', r.summaryText || reportText()); }
+  function copyReport() { var text = reportText(); return copyText(text).then(function () { noty(lang('copied')); }).catch(function () { noty(lang('copy_failed')); showText('KinoPUB Sync 0.0.3 — отчёт', text); }); }
   function clearReport() { storageRemove(KEY.report); storageRemove(KEY.tokenStatus); storageSet(KEY.lastStatus, ''); noty(lang('report_cleared')); }
 
   function favoriteStorage() { var fav = storageGet('favorite', {}) || {}; if (typeof fav === 'string') fav = parseJson(fav) || {}; return fav && typeof fav === 'object' ? fav : {}; }
@@ -622,8 +654,8 @@
   function countIdsInArray(arr, ids) { var n = 0; for (var i = 0; arr && i < arr.length; i++) if (ids[String(arr[i])]) n++; return n; }
   function cleanupReport() { return storageGet(KEY.cleanupReport, null); }
   function cleanupReportText() { var r = cleanupReport(); return r ? JSON.stringify(r, null, 2) : lang('cleanup_missing'); }
-  function showCleanupReport() { var r = cleanupReport(); if (!r) { noty(lang('cleanup_missing')); return; } showText('KinoPUB Sync 0.0.2 — очистка Lampa', JSON.stringify(r, null, 2)); }
-  function copyCleanupReport() { var text = cleanupReportText(); return copyText(text).then(function () { noty(lang('copied')); }).catch(function () { noty(lang('copy_failed')); showText('KinoPUB Sync 0.0.2 — очистка Lampa', text); }); }
+  function showCleanupReport() { var r = cleanupReport(); if (!r) { noty(lang('cleanup_missing')); return; } showText('KinoPUB Sync 0.0.3 — очистка Lampa', JSON.stringify(r, null, 2)); }
+  function copyCleanupReport() { var text = cleanupReportText(); return copyText(text).then(function () { noty(lang('copied')); }).catch(function () { noty(lang('copy_failed')); showText('KinoPUB Sync 0.0.3 — очистка Lampa', text); }); }
 
   function applyOldLampaCleanup() {
     var report = cleanupReport();
@@ -678,24 +710,24 @@
     try {
       if (!window.Lampa || !Lampa.SettingsApi || !Lampa.SettingsApi.addComponent) return;
       Lampa.SettingsApi.addComponent({ component: COMPONENT, name: lang('component'), icon: '<svg width="24" height="24" viewBox="0 0 24 24"><path fill="currentColor" d="M12 3a9 9 0 0 0-9 9h2a7 7 0 0 1 11.95-4.95L15 9h6V3l-2.62 2.62A8.97 8.97 0 0 0 12 3Zm7 9a7 7 0 0 1-11.95 4.95L9 15H3v6l2.62-2.62A9 9 0 0 0 21 12h-2Z"/></svg>' });
-      addParam('kp_sync002_sep_main', 'title', '', '', lang('sep'), lang('sep_descr'));
+      addParam('kp_sync003_sep_main', 'title', '', '', lang('sep'), lang('sep_descr'));
       addParam(KEY.lastStatus, 'input', storageGet(KEY.lastStatus, '') || '', '', lang('status'), lang('status_descr'));
-      addParam('kp_sync002_action_check_token', 'button', '', '', lang('check_token'), lang('check_token_descr'), function () { checkToken(); });
-      addParam('kp_sync002_action_read_bookmarks', 'button', '', '', lang('read_bookmarks'), lang('read_bookmarks_descr'), function () { readBookmarks(); });
-      addParam('kp_sync002_action_show_report', 'button', '', '', lang('show_report'), lang('show_report_descr'), function () { showReport(); });
-      addParam('kp_sync002_action_copy_report', 'button', '', '', lang('copy_report'), lang('copy_report_descr'), function () { copyReport(); });
-      addParam('kp_sync002_action_clear_report', 'button', '', '', lang('clear_report'), lang('clear_report_descr'), function () { clearReport(); });
-      addParam('kp_sync002_sep_cleanup', 'title', '', '', lang('sep_cleanup'), lang('sep_cleanup_descr'));
-      addParam('kp_sync002_action_scan_bad_lampa', 'button', '', '', lang('scan_bad_lampa'), lang('scan_bad_lampa_descr'), function () { scanOldLampaBookmarks(); });
-      addParam('kp_sync002_action_show_cleanup', 'button', '', '', lang('show_cleanup'), lang('show_cleanup_descr'), function () { showCleanupReport(); });
-      addParam('kp_sync002_action_copy_cleanup', 'button', '', '', lang('copy_cleanup'), lang('copy_cleanup_descr'), function () { copyCleanupReport(); });
-      addParam('kp_sync002_action_clear_bad_lampa', 'button', '', '', lang('clear_bad_lampa'), lang('clear_bad_lampa_descr'), function () { applyOldLampaCleanup(); });
+      addParam('kp_sync003_action_check_token', 'button', '', '', lang('check_token'), lang('check_token_descr'), function () { checkToken(); });
+      addParam('kp_sync003_action_read_bookmarks', 'button', '', '', lang('read_bookmarks'), lang('read_bookmarks_descr'), function () { readBookmarks(); });
+      addParam('kp_sync003_action_show_report', 'button', '', '', lang('show_report'), lang('show_report_descr'), function () { showReport(); });
+      addParam('kp_sync003_action_copy_report', 'button', '', '', lang('copy_report'), lang('copy_report_descr'), function () { copyReport(); });
+      addParam('kp_sync003_action_clear_report', 'button', '', '', lang('clear_report'), lang('clear_report_descr'), function () { clearReport(); });
+      addParam('kp_sync003_sep_cleanup', 'title', '', '', lang('sep_cleanup'), lang('sep_cleanup_descr'));
+      addParam('kp_sync003_action_scan_bad_lampa', 'button', '', '', lang('scan_bad_lampa'), lang('scan_bad_lampa_descr'), function () { scanOldLampaBookmarks(); });
+      addParam('kp_sync003_action_show_cleanup', 'button', '', '', lang('show_cleanup'), lang('show_cleanup_descr'), function () { showCleanupReport(); });
+      addParam('kp_sync003_action_copy_cleanup', 'button', '', '', lang('copy_cleanup'), lang('copy_cleanup_descr'), function () { copyCleanupReport(); });
+      addParam('kp_sync003_action_clear_bad_lampa', 'button', '', '', lang('clear_bad_lampa'), lang('clear_bad_lampa_descr'), function () { applyOldLampaCleanup(); });
     } catch (e) { log('settings failed', e && e.message); }
   }
 
   function start() {
-    if (window.KinoPubSync002 && window.KinoPubSync002._started) return;
-    window.KinoPubSync002 = {
+    if (window.KinoPubSync003 && window.KinoPubSync003._started) return;
+    window.KinoPubSync003 = {
       _started: true,
       version: VERSION,
       edition: EDITION,
