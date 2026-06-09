@@ -1,11 +1,10 @@
 (function () {
   'use strict';
 
-  var VERSION = '0.1.0';
-  var EDITION = 'stable-readonly';
-  var COMPONENT = 'kp_sync';
-  var COMPONENT_CLEANUP = 'kp_sync_cleanup';
-  var LOG = '[KinoPUB Sync 0.1.0]';
+  var VERSION = '0.0.6';
+  var EDITION = 'alpha-readonly';
+  var COMPONENT = 'kp_sync_alpha';
+  var LOG = '[KinoPUB Sync 0.0.6]';
   var API_HOST = 'https://api.service-kp.com';
   var CLIENT_ID = 'xbmc';
   var CLIENT_SECRET = 'cgg3gtifu46urtfp2zp1nqtba0k2ezxh';
@@ -17,15 +16,13 @@
   var KEY = {
     token: 'kp_token',
     refresh: 'kp_refresh',
-    lastStatus: 'kp_sync010_last_status',
-    report: 'kp_sync010_bookmarks_report',
-    tokenStatus: 'kp_sync010_token_status',
-    cleanupReport: 'kp_sync010_lampa_cleanup_report',
-    availabilityReport: 'kp_sync010_availability_report',
-    availabilityLimit: 'kp_sync010_availability_limit'
+    lastStatus: 'kp_sync006_last_status',
+    report: 'kp_sync006_bookmarks_report',
+    tokenStatus: 'kp_sync006_token_status',
+    cleanupReport: 'kp_sync006_lampa_cleanup_report'
   };
 
-  if (window.KinoPubSync010 && window.KinoPubSync010.version === VERSION) return;
+  if (window.KinoPubSync006 && window.KinoPubSync006.version === VERSION) return;
 
   function nowIso() {
     try { return new Date().toISOString(); } catch (e) { return String(Date.now()); }
@@ -60,30 +57,19 @@
 
   function lang(key) {
     var ru = {
-      component: 'KinoPUB Sync 0.1.0',
-      component_cleanup: 'KinoPUB Sync — Очистка данных',
+      component: 'KinoPUB Sync 0.0.6',
       sep: '— Проверка и чтение KinoPUB —',
-      sep_descr: 'Стабильная read-only сборка. Ничего не импортирует в Lampa и ничего не меняет в KinoPUB.',
+      sep_descr: 'Тестовая read-only сборка. Ничего не импортирует в Lampa и ничего не меняет в KinoPUB.',
+      cleanup_menu: 'Очистка данных',
+      cleanup_menu_descr: 'Открывает внутренний подраздел очистки данных этого плагина: старые закладки, история, продолжение просмотра и служебные карты. KinoPUB не меняется.',
       sep_cleanup: 'Очистка данных',
-      sep_cleanup_descr: 'Отдельный подраздел для безопасной локальной очистки следов старого Sync: закладки, история, продолжение просмотра и служебные карты. KinoPUB не меняется.',
+      sep_cleanup_descr: 'Внутренний подраздел для безопасной локальной очистки следов старого Sync: закладки, история, продолжение просмотра и служебные карты. KinoPUB не меняется.',
       status: 'Последний статус',
       status_descr: 'Краткий результат последнего действия плагина.',
       check_token: 'Проверить токен основного KinoPUB',
       check_token_descr: 'Проверяет, есть ли kp_token/kp_refresh от основного lampa_kinopub, и доступен ли API KinoPUB. Отдельную авторизацию не запускает.',
       read_bookmarks: 'Считать папки и закладки KinoPUB',
       read_bookmarks_descr: 'Читает все доступные папки и элементы закладок авторизованного аккаунта KinoPUB. Ничего не записывает в Lampa.',
-      sep_availability: '— Проверка доступности карточек KinoPUB —',
-      sep_availability_descr: 'Read-only проверка детальных карточек через /v1/items/<id>?nolinks=1. Нужна для поиска Not Found (#404), пустых или проблемных карточек.',
-      availability_limit: 'Лимит проверки карточек',
-      availability_limit_descr: '0 — проверить все уникальные карточки из последнего отчёта. Можно указать 50/100 для короткого теста.',
-      check_availability: 'Проверить доступность карточек KinoPUB',
-      check_availability_descr: 'Проверяет уникальные item id из последнего отчёта чтения через /v1/items/<id>?nolinks=1 и формирует отдельный отчёт с проблемными карточками и ссылками.',
-      show_availability: 'Показать отчёт доступности',
-      show_availability_descr: 'Показывает краткую сводку последней проверки доступности карточек.',
-      copy_availability: 'Скопировать отчёт доступности',
-      copy_availability_descr: 'Копирует JSON-отчёт по доступности карточек, включая проблемные item id и ссылки.',
-      clear_availability: 'Очистить отчёт доступности',
-      clear_availability_descr: 'Удаляет только отчёт проверки доступности карточек.',
       show_report: 'Показать краткий отчёт',
       show_report_descr: 'Открывает краткую сводку последнего чтения папок и закладок.',
       copy_report: 'Скопировать полный отчёт',
@@ -106,11 +92,6 @@
       report_missing: 'Отчёт ещё не сформирован.',
       cleanup_missing: 'Отчёт очистки ещё не сформирован.',
       report_cleared: 'Отчёт очищен.',
-      availability_missing: 'Отчёт доступности ещё не сформирован.',
-      availability_need_report: 'Сначала сформируйте отчёт чтения папок и закладок.',
-      availability_checking: 'Проверяю доступность карточек KinoPUB...',
-      availability_done: 'Проверка доступности завершена',
-      availability_cleared: 'Отчёт доступности очищен.',
       copied: 'Отчёт скопирован.',
       copy_failed: 'Не удалось скопировать автоматически. Открыл текст отчёта.',
       done: 'Чтение завершено',
@@ -575,7 +556,7 @@
       if (report.warnings.length > 12) lines.push('- ... ещё ' + (report.warnings.length - 12));
       lines.push('');
     }
-    lines.push('Важно: v0.1.0 ничего не импортирует в Lampa и ничего не меняет в KinoPUB. Проверка доступности и очистка данных Lampa выполняются только отдельными кнопками.');
+    lines.push('Важно: v0.0.6 ничего не импортирует в Lampa и ничего не меняет в KinoPUB. Очистка данных Lampa выполняется только через отдельный внутренний подраздел и подтверждение.');
     return lines.join('\n');
   }
 
@@ -638,206 +619,14 @@
 
   function getReport() { return storageGet(KEY.report, null); }
   function reportText() { var r = getReport(); return r ? JSON.stringify(r, null, 2) : lang('report_missing'); }
-  function showReport() { var r = getReport(); if (!r) { noty(lang('report_missing')); return; } showText('KinoPUB Sync 0.1.0', r.summaryText || reportText()); }
-  function copyReport() { var text = reportText(); return copyText(text).then(function () { noty(lang('copied')); }).catch(function () { noty(lang('copy_failed')); showText('KinoPUB Sync 0.1.0 — отчёт', text); }); }
+  function showReport() { var r = getReport(); if (!r) { noty(lang('report_missing')); return; } showText('KinoPUB Sync 0.0.6', r.summaryText || reportText()); }
+  function copyReport() { var text = reportText(); return copyText(text).then(function () { noty(lang('copied')); }).catch(function () { noty(lang('copy_failed')); showText('KinoPUB Sync 0.0.6 — отчёт', text); }); }
   function clearReport() { storageRemove(KEY.report); storageRemove(KEY.tokenStatus); storageSet(KEY.lastStatus, ''); noty(lang('report_cleared')); }
 
   function padImdb(id) {
     var s = String(id || '').replace(/^tt/i, '').replace(/[^0-9]/g, '');
     while (s.length && s.length < 7) s = '0' + s;
     return s ? 'tt' + s : '';
-  }
-
-  function itemLinks(norm) {
-    var imdb = padImdb(norm && norm.imdb_id);
-    var kp = String(norm && norm.kinopoisk_id || '').replace(/[^0-9]/g, '');
-    var kind = String(norm && norm.normalized_kind || '').toLowerCase();
-    return {
-      kinopub: norm && norm.id ? 'https://kino.pub/item/view/' + encodeURIComponent(String(norm.id)) : '',
-      imdb: imdb ? 'https://www.imdb.com/title/' + imdb + '/' : '',
-      kinopoisk: kp ? 'https://www.kinopoisk.ru/' + (kind === 'tv' ? 'series' : 'film') + '/' + kp + '/' : ''
-    };
-  }
-
-  function firstObjectFromDetail(json) {
-    json = parseJson(json);
-    if (!json) return {};
-    if (isObject(json.item)) return json.item;
-    if (isObject(json.data)) {
-      if (isObject(json.data.item)) return json.data.item;
-      return json.data;
-    }
-    if (isObject(json.result)) {
-      if (isObject(json.result.item)) return json.result.item;
-      return json.result;
-    }
-    return isObject(json) ? json : {};
-  }
-
-  function hasArrayWithItems(obj, keys) {
-    if (!obj) return false;
-    for (var i = 0; i < keys.length; i++) {
-      var v = obj[keys[i]];
-      if (isArray(v) && v.length > 0) return true;
-    }
-    return false;
-  }
-
-  function detailMediaInfo(json) {
-    var obj = firstObjectFromDetail(json);
-    var places = [json, obj];
-    if (json && isObject(json.data)) places.push(json.data);
-    if (json && isObject(json.result)) places.push(json.result);
-    var hasVideos = false, hasSeasons = false, hasEpisodes = false;
-    for (var i = 0; i < places.length; i++) {
-      if (hasArrayWithItems(places[i], ['videos', 'video', 'files', 'playlist', 'tracklist'])) hasVideos = true;
-      if (hasArrayWithItems(places[i], ['seasons', 'season'])) hasSeasons = true;
-      if (hasArrayWithItems(places[i], ['episodes', 'episode'])) hasEpisodes = true;
-    }
-    return {
-      hasDetailObject: !!(obj && (obj.id != null || obj.title || obj.type)),
-      hasVideos: hasVideos,
-      hasSeasons: hasSeasons,
-      hasEpisodes: hasEpisodes,
-      hasMedia: hasVideos || hasSeasons || hasEpisodes,
-      detailKeys: obj && typeof obj === 'object' ? Object.keys(obj).sort().slice(0, 80) : []
-    };
-  }
-
-  function availabilityProblemEntry(norm, status, reason, err, media) {
-    var links = itemLinks(norm);
-    var folders = norm && norm.folders ? norm.folders : [{ id: norm.folder_id || '', title: norm.folder_title || '' }];
-    return {
-      id: String(norm && norm.id || ''),
-      title: String(norm && norm.title || ''),
-      type: String(norm && norm.type || ''),
-      subtype: String(norm && norm.subtype || ''),
-      normalized_kind: String(norm && norm.normalized_kind || ''),
-      year: String(norm && norm.year || ''),
-      imdb_id: String(norm && norm.imdb_id || ''),
-      kinopoisk_id: String(norm && norm.kinopoisk_id || ''),
-      tmdb_id: String(norm && norm.tmdb_id || ''),
-      folders: folders,
-      status: status,
-      reason: reason || '',
-      httpStatus: err && err.http || 0,
-      message: err && err.message || '',
-      media: media || null,
-      links: links
-    };
-  }
-
-  function buildAvailabilitySummary(report) {
-    var lines = [];
-    lines.push('KinoPUB Sync v' + VERSION + ' — отчёт доступности карточек');
-    lines.push('Дата: ' + report.generatedAt);
-    lines.push('Источник: последний отчёт чтения от ' + (report.basedOnBookmarksReportAt || ''));
-    lines.push('Проверено: ' + report.stats.checked + ' / ' + report.stats.total);
-    lines.push('OK: ' + report.stats.ok);
-    lines.push('Not Found / 404: ' + report.stats.notFound);
-    lines.push('Без явной media-структуры: ' + report.stats.noMedia);
-    lines.push('API/network errors: ' + report.stats.apiError);
-    lines.push('Пропущено: ' + report.stats.skipped);
-    lines.push('Проблемных карточек: ' + report.problemItems.length);
-    if (report.problemItems.length) {
-      lines.push('');
-      lines.push('Первые проблемные карточки:');
-      for (var i = 0; i < report.problemItems.length && i < 20; i++) {
-        var it = report.problemItems[i];
-        lines.push('- [' + it.status + '] ' + it.title + ' — ' + it.links.kinopub);
-      }
-    }
-    return lines.join('\n');
-  }
-
-  function availabilityReport() { return storageGet(KEY.availabilityReport, null); }
-  function availabilityReportText() { var r = availabilityReport(); return r ? JSON.stringify(r, null, 2) : lang('availability_missing'); }
-  function showAvailabilityReport() { var r = availabilityReport(); if (!r) { noty(lang('availability_missing')); return; } showText('KinoPUB Sync 0.1.0 — доступность карточек', r.summaryText || JSON.stringify(r, null, 2)); }
-  function copyAvailabilityReport() { var text = availabilityReportText(); return copyText(text).then(function () { noty(lang('copied')); }).catch(function () { noty(lang('copy_failed')); showText('KinoPUB Sync 0.1.0 — доступность карточек', text); }); }
-  function clearAvailabilityReport() { storageRemove(KEY.availabilityReport); noty(lang('availability_cleared')); }
-
-  function checkOneAvailability(norm, index, total) {
-    if (!norm || !norm.id) return Promise.resolve({ status: 'skipped', reason: 'no_item_id' });
-    if (index === 1 || index % 10 === 0 || index === total) setStatus(lang('availability_checking') + ' ' + index + '/' + total);
-    return apiGet('/items/' + encodeURIComponent(String(norm.id)), { nolinks: 1 }).then(function (json) {
-      var media = detailMediaInfo(json);
-      if (!media.hasDetailObject) return { status: 'api_error', reason: 'empty_or_unexpected_detail_response', error: { http: 0, message: 'empty_or_unexpected_detail_response' }, media: media };
-      if (!media.hasMedia) return { status: 'no_media', reason: 'detail_exists_but_no_videos_seasons_or_episodes_detected', media: media };
-      return { status: 'ok', reason: 'detail_exists_and_media_structure_detected', media: media };
-    }).catch(function (err) {
-      var e = errorSummary(err);
-      var status = e.http === 404 ? 'not_found' : 'api_error';
-      return { status: status, reason: status === 'not_found' ? 'GET /v1/items/<id> returned HTTP 404' : 'GET /v1/items/<id> failed', error: e, media: null };
-    });
-  }
-
-  function eachLimitSimple(list, limit, iterator) {
-    limit = Math.max(1, parseInt(limit, 10) || 1);
-    var index = 0;
-    var running = 0;
-    return new Promise(function (resolve, reject) {
-      function launch() {
-        if (index >= list.length && running <= 0) { resolve(true); return; }
-        while (running < limit && index < list.length) {
-          var item = list[index];
-          var current = index++;
-          running++;
-          Promise.resolve(iterator(item, current)).then(function () { running--; launch(); }).catch(function (err) { running--; reject(err); });
-        }
-      }
-      launch();
-    });
-  }
-
-  function checkAvailability() {
-    var source = getReport();
-    if (!source || !source.uniqueItems) { noty(lang('availability_need_report')); return Promise.resolve(false); }
-    var all = [];
-    for (var k in source.uniqueItems) if (source.uniqueItems.hasOwnProperty(k)) all.push(source.uniqueItems[k]);
-    all.sort(function (a, b) { return String(a.title || '').localeCompare(String(b.title || '')); });
-    var limit = getInt(KEY.availabilityLimit, 0);
-    var list = limit > 0 ? all.slice(0, limit) : all;
-    var report = {
-      version: VERSION,
-      edition: EDITION,
-      generatedAt: nowIso(),
-      basedOnBookmarksReportAt: source.generatedAt || '',
-      source: 'KinoPUB API item availability read-only audit',
-      token: { accessTokenPresent: !!tokenAccess(), refreshTokenPresent: !!tokenRefresh(), tokensIncluded: false },
-      api: { host: API_HOST, endpoints: ['/v1/items/<item_id>?nolinks=1'], webLinkPattern: 'https://kino.pub/item/view/<item_id>' },
-      mode: { requestedTotal: all.length, checkedTotal: list.length, limit: limit, note: '0 means all unique items from the last bookmarks report' },
-      stats: { total: list.length, checked: 0, ok: 0, notFound: 0, noMedia: 0, apiError: 0, skipped: Math.max(0, all.length - list.length) },
-      problemItems: [],
-      checkedSamples: []
-    };
-    noty(lang('availability_checking'));
-    setStatus(lang('availability_checking') + ' 0/' + list.length);
-    var availabilityConcurrency = 4;
-    return eachLimitSimple(list, availabilityConcurrency, function (norm, idx) {
-      return checkOneAvailability(norm, idx + 1, list.length).then(function (res) {
-        report.stats.checked++;
-        if (res.status === 'ok') report.stats.ok++;
-        else if (res.status === 'not_found') report.stats.notFound++;
-        else if (res.status === 'no_media') report.stats.noMedia++;
-        else if (res.status === 'skipped') report.stats.skipped++;
-        else report.stats.apiError++;
-        if (res.status !== 'ok') report.problemItems.push(availabilityProblemEntry(norm, res.status, res.reason, res.error, res.media));
-        else if (report.checkedSamples.length < 20) report.checkedSamples.push({ id: norm.id, title: norm.title, status: 'ok', links: itemLinks(norm), media: res.media });
-      });
-    }).then(function () {
-      report.summaryText = buildAvailabilitySummary(report);
-      storageSet(KEY.availabilityReport, report);
-      setStatus(lang('availability_done') + ': OK ' + report.stats.ok + ', 404 ' + report.stats.notFound + ', noMedia ' + report.stats.noMedia + ', errors ' + report.stats.apiError);
-      noty(lang('availability_done'));
-      return report;
-    }).catch(function (err) {
-      report.error = errorSummary(err);
-      report.summaryText = buildAvailabilitySummary(report);
-      storageSet(KEY.availabilityReport, report);
-      setStatus('Ошибка проверки доступности: ' + report.error.message);
-      noty('Ошибка проверки доступности');
-      return report;
-    });
   }
 
   function favoriteStorage() { var fav = storageGet('favorite', {}) || {}; if (typeof fav === 'string') fav = parseJson(fav) || {}; return fav && typeof fav === 'object' ? fav : {}; }
@@ -1003,8 +792,8 @@
   function countIdsInArray(arr, ids) { var n = 0; for (var i = 0; arr && i < arr.length; i++) if (ids[String(arr[i])]) n++; return n; }
   function cleanupReport() { return storageGet(KEY.cleanupReport, null); }
   function cleanupReportText() { var r = cleanupReport(); return r ? JSON.stringify(r, null, 2) : lang('cleanup_missing'); }
-  function showCleanupReport() { var r = cleanupReport(); if (!r) { noty(lang('cleanup_missing')); return; } showText('KinoPUB Sync 0.1.0 — очистка Lampa', JSON.stringify(r, null, 2)); }
-  function copyCleanupReport() { var text = cleanupReportText(); return copyText(text).then(function () { noty(lang('copied')); }).catch(function () { noty(lang('copy_failed')); showText('KinoPUB Sync 0.1.0 — очистка Lampa', text); }); }
+  function showCleanupReport() { var r = cleanupReport(); if (!r) { noty(lang('cleanup_missing')); return; } showText('KinoPUB Sync 0.0.6 — очистка Lampa', JSON.stringify(r, null, 2)); }
+  function copyCleanupReport() { var text = cleanupReportText(); return copyText(text).then(function () { noty(lang('copied')); }).catch(function () { noty(lang('copy_failed')); showText('KinoPUB Sync 0.0.6 — очистка Lampa', text); }); }
 
   function applyOldLampaCleanup() {
     var report = cleanupReport();
@@ -1056,6 +845,38 @@
     return report;
   }
 
+
+  function showCleanupMenu() {
+    var apiName = 'KinoPubSync006';
+    var btnStyle = 'display:block;width:100%;margin:.45em 0;padding:.65em .75em;border-radius:.45em;border:0;background:#3f51b5;color:#fff;text-align:left;font-size:1em;';
+    var smallStyle = 'font-size:.85em;opacity:.75;margin:.25em 0 .75em 0;line-height:1.35';
+    function action(fn) {
+      return "try{if(window.Lampa&&Lampa.Modal&&Lampa.Modal.close)Lampa.Modal.close();}catch(e){};window." + apiName + "." + fn + "();return false;";
+    }
+    try {
+      if (window.Lampa && Lampa.Modal && Lampa.Modal.open) {
+        var html = '';
+        html += '<div style="line-height:1.4">';
+        html += '<div style="margin-bottom:.75em">' + escapeHtml(lang('sep_cleanup_descr')) + '</div>';
+        html += '<button style="' + btnStyle + '" onclick="' + action('scanOldLampaBookmarks') + '">' + escapeHtml(lang('scan_bad_lampa')) + '</button>';
+        html += '<div style="' + smallStyle + '">' + escapeHtml(lang('scan_bad_lampa_descr')) + '</div>';
+        html += '<button style="' + btnStyle + '" onclick="' + action('showCleanupReport') + '">' + escapeHtml(lang('show_cleanup')) + '</button>';
+        html += '<button style="' + btnStyle + '" onclick="' + action('copyCleanupReport') + '">' + escapeHtml(lang('copy_cleanup')) + '</button>';
+        html += '<button style="' + btnStyle + 'background:#8b2d2d;" onclick="' + action('applyOldLampaCleanup') + '">' + escapeHtml(lang('clear_bad_lampa')) + '</button>';
+        html += '<div style="' + smallStyle + '">' + escapeHtml(lang('clear_bad_lampa_descr')) + '</div>';
+        html += '</div>';
+        Lampa.Modal.open({ title: lang('cleanup_menu'), html: html, size: 'medium' });
+        return;
+      }
+    } catch (e) { log('cleanup menu failed', e && e.message); }
+    showText(lang('cleanup_menu'), [
+      lang('scan_bad_lampa') + ': ' + apiName + '.scanOldLampaBookmarks()',
+      lang('show_cleanup') + ': ' + apiName + '.showCleanupReport()',
+      lang('copy_cleanup') + ': ' + apiName + '.copyCleanupReport()',
+      lang('clear_bad_lampa') + ': ' + apiName + '.applyOldLampaCleanup()'
+    ].join('\n'));
+  }
+
   function addParamTo(component, name, type, def, values, title, descr, onChange) {
     try {
       if (!window.Lampa || !Lampa.SettingsApi || !Lampa.SettingsApi.addParam) return;
@@ -1065,38 +886,25 @@
   }
 
   function addParam(name, type, def, values, title, descr, onChange) { return addParamTo(COMPONENT, name, type, def, values, title, descr, onChange); }
-  function addCleanupParam(name, type, def, values, title, descr, onChange) { return addParamTo(COMPONENT_CLEANUP, name, type, def, values, title, descr, onChange); }
-
   function addSettings() {
     try {
       if (!window.Lampa || !Lampa.SettingsApi || !Lampa.SettingsApi.addComponent) return;
       var icon = '<svg width="24" height="24" viewBox="0 0 24 24"><path fill="currentColor" d="M12 3a9 9 0 0 0-9 9h2a7 7 0 0 1 11.95-4.95L15 9h6V3l-2.62 2.62A8.97 8.97 0 0 0 12 3Zm7 9a7 7 0 0 1-11.95 4.95L9 15H3v6l2.62-2.62A9 9 0 0 0 21 12h-2Z"/></svg>';
       Lampa.SettingsApi.addComponent({ component: COMPONENT, name: lang('component'), icon: icon });
-      addParam('kp_sync010_sep_main', 'title', '', '', lang('sep'), lang('sep_descr'));
+      addParam('kp_sync006_sep_main', 'title', '', '', lang('sep'), lang('sep_descr'));
       addParam(KEY.lastStatus, 'input', storageGet(KEY.lastStatus, '') || '', '', lang('status'), lang('status_descr'));
-      addParam('kp_sync010_action_check_token', 'button', '', '', lang('check_token'), lang('check_token_descr'), function () { checkToken(); });
-      addParam('kp_sync010_action_read_bookmarks', 'button', '', '', lang('read_bookmarks'), lang('read_bookmarks_descr'), function () { readBookmarks(); });
-      addParam('kp_sync010_action_show_report', 'button', '', '', lang('show_report'), lang('show_report_descr'), function () { showReport(); });
-      addParam('kp_sync010_action_copy_report', 'button', '', '', lang('copy_report'), lang('copy_report_descr'), function () { copyReport(); });
-      addParam('kp_sync010_action_clear_report', 'button', '', '', lang('clear_report'), lang('clear_report_descr'), function () { clearReport(); });
-      addParam('kp_sync010_sep_availability', 'title', '', '', lang('sep_availability'), lang('sep_availability_descr'));
-      addParam(KEY.availabilityLimit, 'input', storageGet(KEY.availabilityLimit, 0) || 0, '', lang('availability_limit'), lang('availability_limit_descr'));
-      addParam('kp_sync010_action_check_availability', 'button', '', '', lang('check_availability'), lang('check_availability_descr'), function () { checkAvailability(); });
-      addParam('kp_sync010_action_show_availability', 'button', '', '', lang('show_availability'), lang('show_availability_descr'), function () { showAvailabilityReport(); });
-      addParam('kp_sync010_action_copy_availability', 'button', '', '', lang('copy_availability'), lang('copy_availability_descr'), function () { copyAvailabilityReport(); });
-      addParam('kp_sync010_action_clear_availability', 'button', '', '', lang('clear_availability'), lang('clear_availability_descr'), function () { clearAvailabilityReport(); });
-      Lampa.SettingsApi.addComponent({ component: COMPONENT_CLEANUP, name: lang('component_cleanup'), icon: icon });
-      addCleanupParam('kp_sync010_sep_cleanup', 'title', '', '', lang('sep_cleanup'), lang('sep_cleanup_descr'));
-      addCleanupParam('kp_sync010_action_scan_bad_lampa', 'button', '', '', lang('scan_bad_lampa'), lang('scan_bad_lampa_descr'), function () { scanOldLampaBookmarks(); });
-      addCleanupParam('kp_sync010_action_show_cleanup', 'button', '', '', lang('show_cleanup'), lang('show_cleanup_descr'), function () { showCleanupReport(); });
-      addCleanupParam('kp_sync010_action_copy_cleanup', 'button', '', '', lang('copy_cleanup'), lang('copy_cleanup_descr'), function () { copyCleanupReport(); });
-      addCleanupParam('kp_sync010_action_clear_bad_lampa', 'button', '', '', lang('clear_bad_lampa'), lang('clear_bad_lampa_descr'), function () { applyOldLampaCleanup(); });
+      addParam('kp_sync006_action_check_token', 'button', '', '', lang('check_token'), lang('check_token_descr'), function () { checkToken(); });
+      addParam('kp_sync006_action_read_bookmarks', 'button', '', '', lang('read_bookmarks'), lang('read_bookmarks_descr'), function () { readBookmarks(); });
+      addParam('kp_sync006_action_show_report', 'button', '', '', lang('show_report'), lang('show_report_descr'), function () { showReport(); });
+      addParam('kp_sync006_action_copy_report', 'button', '', '', lang('copy_report'), lang('copy_report_descr'), function () { copyReport(); });
+      addParam('kp_sync006_action_clear_report', 'button', '', '', lang('clear_report'), lang('clear_report_descr'), function () { clearReport(); });
+      addParam('kp_sync006_action_cleanup_menu', 'button', '', '', lang('cleanup_menu'), lang('cleanup_menu_descr'), function () { showCleanupMenu(); });
     } catch (e) { log('settings failed', e && e.message); }
   }
 
   function start() {
-    if (window.KinoPubSync010 && window.KinoPubSync010._started) return;
-    window.KinoPubSync010 = {
+    if (window.KinoPubSync006 && window.KinoPubSync006._started) return;
+    window.KinoPubSync006 = {
       _started: true,
       version: VERSION,
       edition: EDITION,
@@ -1107,12 +915,6 @@
       showReport: showReport,
       copyReport: copyReport,
       clearReport: clearReport,
-      checkAvailability: checkAvailability,
-      availabilityReport: availabilityReport,
-      availabilityReportText: availabilityReportText,
-      showAvailabilityReport: showAvailabilityReport,
-      copyAvailabilityReport: copyAvailabilityReport,
-      clearAvailabilityReport: clearAvailabilityReport,
       scanOldLampaBookmarks: scanOldLampaBookmarks,
       cleanupReport: cleanupReport,
       cleanupReportText: cleanupReportText,
@@ -1122,9 +924,8 @@
       status: function () { return storageGet(KEY.lastStatus, ''); },
       tokenStatus: function () { return storageGet(KEY.tokenStatus, null); }
     };
-    window.KinoPubSync = window.KinoPubSync010;
     addSettings();
-    log('started', 'read-only audit build with data cleanup tools');
+    log('started', 'alpha read-only audit build with internal cleanup menu');
   }
 
   if (window.appready) start();

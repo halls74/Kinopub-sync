@@ -1,6 +1,6 @@
 (function () {
   'use strict';
-  var LOG = '[KinoPUB Sync 0.1.0 loader]';
+  var LOG = '[KinoPUB Sync 0.0.6 loader]';
   var ORIGINAL = 'https://mainsync-afk.github.io/lampa_kinopub/kp.js';
   function baseUrl() {
     try {
