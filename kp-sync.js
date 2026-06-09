@@ -1,10 +1,11 @@
 (function () {
   'use strict';
 
-  var VERSION = '0.0.4';
-  var EDITION = 'alpha-readonly';
-  var COMPONENT = 'kp_sync_alpha';
-  var LOG = '[KinoPUB Sync 0.0.4]';
+  var VERSION = '0.1.0';
+  var EDITION = 'stable-readonly';
+  var COMPONENT = 'kp_sync';
+  var COMPONENT_CLEANUP = 'kp_sync_cleanup';
+  var LOG = '[KinoPUB Sync 0.1.0]';
   var API_HOST = 'https://api.service-kp.com';
   var CLIENT_ID = 'xbmc';
   var CLIENT_SECRET = 'cgg3gtifu46urtfp2zp1nqtba0k2ezxh';
@@ -16,15 +17,15 @@
   var KEY = {
     token: 'kp_token',
     refresh: 'kp_refresh',
-    lastStatus: 'kp_sync004_last_status',
-    report: 'kp_sync004_bookmarks_report',
-    tokenStatus: 'kp_sync004_token_status',
-    cleanupReport: 'kp_sync004_lampa_cleanup_report',
-    availabilityReport: 'kp_sync004_availability_report',
-    availabilityLimit: 'kp_sync004_availability_limit'
+    lastStatus: 'kp_sync010_last_status',
+    report: 'kp_sync010_bookmarks_report',
+    tokenStatus: 'kp_sync010_token_status',
+    cleanupReport: 'kp_sync010_lampa_cleanup_report',
+    availabilityReport: 'kp_sync010_availability_report',
+    availabilityLimit: 'kp_sync010_availability_limit'
   };
 
-  if (window.KinoPubSync004 && window.KinoPubSync004.version === VERSION) return;
+  if (window.KinoPubSync010 && window.KinoPubSync010.version === VERSION) return;
 
   function nowIso() {
     try { return new Date().toISOString(); } catch (e) { return String(Date.now()); }
@@ -59,11 +60,12 @@
 
   function lang(key) {
     var ru = {
-      component: 'KinoPUB Sync 0.0.4',
+      component: 'KinoPUB Sync 0.1.0',
+      component_cleanup: 'KinoPUB Sync — Очистка данных',
       sep: '— Проверка и чтение KinoPUB —',
-      sep_descr: 'Тестовая read-only сборка. Ничего не импортирует в Lampa и ничего не меняет в KinoPUB.',
-      sep_cleanup: '— Очистка следов старого Sync-импорта —',
-      sep_cleanup_descr: 'Локальная очистка некорректных закладок, которые могли быть созданы старыми тестовыми версиями Sync. KinoPUB не меняется.',
+      sep_descr: 'Стабильная read-only сборка. Ничего не импортирует в Lampa и ничего не меняет в KinoPUB.',
+      sep_cleanup: 'Очистка данных',
+      sep_cleanup_descr: 'Отдельный подраздел для безопасной локальной очистки следов старого Sync: закладки, история, продолжение просмотра и служебные карты. KinoPUB не меняется.',
       status: 'Последний статус',
       status_descr: 'Краткий результат последнего действия плагина.',
       check_token: 'Проверить токен основного KinoPUB',
@@ -88,14 +90,14 @@
       copy_report_descr: 'Копирует JSON-отчёт по папкам/закладкам для анализа. Токены в отчёт не включаются.',
       clear_report: 'Очистить отчёт',
       clear_report_descr: 'Удаляет сохранённый отчёт и статус этой тестовой сборки. Закладки Lampa и токены KinoPUB не трогаются.',
-      scan_bad_lampa: 'Найти некорректные закладки старого Sync',
-      scan_bad_lampa_descr: 'Ищет в локальных закладках Lampa карточки с признаками старого Sync-импорта и папки вида “KinoPUB: ...”. Ничего не удаляет.',
+      scan_bad_lampa: 'Найти старые данные Sync в Lampa',
+      scan_bad_lampa_descr: 'Ищет локальные следы старого Sync: некорректные закладки, папки KinoPUB: ..., историю, продолжение просмотра и служебные карты. Ничего не удаляет.',
       show_cleanup: 'Показать отчёт очистки Lampa',
       show_cleanup_descr: 'Показывает, какие локальные записи Lampa будут затронуты при очистке.',
       copy_cleanup: 'Скопировать отчёт очистки Lampa',
-      copy_cleanup_descr: 'Копирует JSON-отчёт по найденным некорректным локальным закладкам Lampa.',
-      clear_bad_lampa: 'Очистить найденные закладки старого Sync',
-      clear_bad_lampa_descr: 'Удаляет только найденные локальные записи старого Sync-импорта из закладок Lampa и папок “KinoPUB: ...”. Перед удалением показывает подтверждение.',
+      copy_cleanup_descr: 'Копирует JSON-отчёт по найденным локальным следам старого Sync: закладки, история, timeline и служебные карты.',
+      clear_bad_lampa: 'Очистить найденные старые данные Sync',
+      clear_bad_lampa_descr: 'Удаляет только найденные локальные следы старого Sync: закладки, историю, продолжение просмотра и служебные карты. Перед удалением показывает подтверждение.',
       no_token: 'Токен KinoPUB не найден. Сначала авторизуйтесь в основном KinoPUB-плагине.',
       token_ok: 'Токен найден, API доступен',
       token_refresh_ok: 'Токен обновлён через refresh_token, API доступен',
@@ -112,8 +114,8 @@
       copied: 'Отчёт скопирован.',
       copy_failed: 'Не удалось скопировать автоматически. Открыл текст отчёта.',
       done: 'Чтение завершено',
-      cleanup_scanned: 'Анализ Lampa-закладок завершён',
-      cleanup_done: 'Очистка Lampa-закладок завершена',
+      cleanup_scanned: 'Анализ данных Lampa завершён',
+      cleanup_done: 'Очистка данных Lampa завершена',
       cleanup_cancelled: 'Очистка отменена'
     };
     return ru[key] || key;
@@ -366,6 +368,21 @@
     });
   }
 
+  function repeatedTailRowsFromAttempt(attempt) {
+    var trace = attempt && attempt.pageTrace || [];
+    if (!trace.length) return 0;
+    var last = trace[trace.length - 1] || {};
+    if (last.continueReason === 'stop_no_new_unique_items' && (last.newUniqueItems || 0) === 0) return last.itemsReturned || 0;
+    return 0;
+  }
+
+  function acceptedRowsFromAttempt(attempt) {
+    attempt = attempt || {};
+    var raw = attempt.rawRowsFetched || 0;
+    var repeated = repeatedTailRowsFromAttempt(attempt);
+    return Math.max(0, raw - repeated);
+  }
+
   function folderId(folder) { return folder && folder.id != null ? String(folder.id) : ''; }
   function folderTitle(folder) { return String((folder && (folder.title || folder.name)) || 'Без названия'); }
 
@@ -477,9 +494,12 @@
         pagesRequested: best.pagesRequested,
         rawRowsFetched: best.rawRowsFetched,
         itemsFetched: best.rawRowsFetched,
+        acceptedRawRows: acceptedRowsFromAttempt(best),
+        repeatedTailRows: repeatedTailRowsFromAttempt(best),
         uniqueItems: best.uniqueItems,
         duplicateRows: best.duplicateRows,
         missingRawByCount: expected && best.rawRowsFetched < expected ? expected - best.rawRowsFetched : 0,
+        missingAcceptedByCount: expected && acceptedRowsFromAttempt(best) < expected ? expected - acceptedRowsFromAttempt(best) : 0,
         extraRawOverCount: expected && best.rawRowsFetched > expected ? best.rawRowsFetched - expected : 0,
         stoppedReason: best.stoppedReason,
         error: best.error,
@@ -500,7 +520,9 @@
         }
         if (report.rawSamples.length < REPORT_SAMPLE_LIMIT) report.rawSamples.push({ folder_id: fid, folder_title: ftitle, item: sanitizeRawSample(best.rows[r].raw) });
       }
-      if (folderReport.missingRawByCount) report.warnings.push('Папка “' + ftitle + '”: заявлено ' + expected + ', сырых строк получено ' + best.rawRowsFetched + ', не хватает ' + folderReport.missingRawByCount + '.');
+      if (folderReport.repeatedTailRows) report.warnings.push('Папка “' + ftitle + '”: API начал повторять последнюю страницу. Принято неповторных строк ' + folderReport.acceptedRawRows + ' из ' + expected + ', повтор хвоста: ' + folderReport.repeatedTailRows + '.');
+      if (folderReport.missingRawByCount && !folderReport.repeatedTailRows) report.warnings.push('Папка “' + ftitle + '”: заявлено ' + expected + ', сырых строк получено ' + best.rawRowsFetched + ', не хватает ' + folderReport.missingRawByCount + '.');
+      if (folderReport.missingAcceptedByCount && folderReport.repeatedTailRows) report.warnings.push('Папка “' + ftitle + '”: по неповторным страницам не хватает ' + folderReport.missingAcceptedByCount + ' строк. Это может быть ограничение/рассинхрон API или скрытые/битые записи.');
       if (folderReport.duplicateRows) report.warnings.push('Папка “' + ftitle + '”: найдено повторяющихся строк item id: ' + folderReport.duplicateRows + '. Это не обязательно ошибка, но важно для будущего импорта.');
       return folderReport;
     });
@@ -533,6 +555,8 @@
     lines.push('Папок: ' + report.totals.folders);
     lines.push('Элементов по счётчикам папок: ' + report.totals.reportedRows);
     lines.push('Сырых строк получено: ' + report.totals.rawRowsFetched);
+    lines.push('Принято неповторных строк: ' + (report.totals.acceptedRawRows || report.totals.rawRowsFetched));
+    lines.push('Повтор хвоста страниц: ' + (report.totals.repeatedTailRows || 0));
     lines.push('Уникальных строк внутри папок: ' + report.totals.uniqueRowsInFolders);
     lines.push('Уникальных KinoPUB item id глобально: ' + report.totals.uniqueGlobalItems);
     lines.push('Папок с ошибками: ' + report.totals.folderErrors);
@@ -551,7 +575,7 @@
       if (report.warnings.length > 12) lines.push('- ... ещё ' + (report.warnings.length - 12));
       lines.push('');
     }
-    lines.push('Важно: v0.0.4 ничего не импортирует в Lampa и ничего не меняет в KinoPUB. Проверка доступности и очистка Lampa выполняются только отдельными кнопками.');
+    lines.push('Важно: v0.1.0 ничего не импортирует в Lampa и ничего не меняет в KinoPUB. Проверка доступности и очистка данных Lampa выполняются только отдельными кнопками.');
     return lines.join('\n');
   }
 
@@ -571,7 +595,7 @@
       catalog: [],
       rawSamples: [],
       stats: { typeStats: {}, subtypeStats: {}, normalizedKindStats: {}, unknownRawTypes: {}, withImdb: 0, withoutImdb: 0, withKinopoisk: 0, withoutKinopoisk: 0, withTmdb: 0, withoutTmdb: 0, missingImdbSamples: [], missingKinopoiskSamples: [] },
-      totals: { folders: 0, reportedRows: 0, rawRowsFetched: 0, uniqueRowsInFolders: 0, uniqueGlobalItems: 0, folderErrors: 0, foldersWithMissingRawCount: 0, duplicateRowsInFolders: 0 },
+      totals: { folders: 0, reportedRows: 0, rawRowsFetched: 0, acceptedRawRows: 0, repeatedTailRows: 0, uniqueRowsInFolders: 0, uniqueGlobalItems: 0, folderErrors: 0, foldersWithMissingRawCount: 0, foldersWithMissingAcceptedCount: 0, duplicateRowsInFolders: 0 },
       _globalItems: {}
     };
     return apiGet('/bookmarks', {}).then(function (json) {
@@ -587,10 +611,13 @@
       for (var i = 0; i < report.folders.length; i++) {
         report.totals.reportedRows += report.folders[i].countReported || 0;
         report.totals.rawRowsFetched += report.folders[i].rawRowsFetched || 0;
+        report.totals.acceptedRawRows += report.folders[i].acceptedRawRows || report.folders[i].rawRowsFetched || 0;
+        report.totals.repeatedTailRows += report.folders[i].repeatedTailRows || 0;
         report.totals.uniqueRowsInFolders += report.folders[i].uniqueItems || 0;
         report.totals.duplicateRowsInFolders += report.folders[i].duplicateRows || 0;
         if (report.folders[i].error) report.totals.folderErrors++;
         if (report.folders[i].missingRawByCount) report.totals.foldersWithMissingRawCount++;
+        if (report.folders[i].missingAcceptedByCount) report.totals.foldersWithMissingAcceptedCount++;
       }
       report.uniqueItems = report._globalItems;
       delete report._globalItems;
@@ -611,8 +638,8 @@
 
   function getReport() { return storageGet(KEY.report, null); }
   function reportText() { var r = getReport(); return r ? JSON.stringify(r, null, 2) : lang('report_missing'); }
-  function showReport() { var r = getReport(); if (!r) { noty(lang('report_missing')); return; } showText('KinoPUB Sync 0.0.4', r.summaryText || reportText()); }
-  function copyReport() { var text = reportText(); return copyText(text).then(function () { noty(lang('copied')); }).catch(function () { noty(lang('copy_failed')); showText('KinoPUB Sync 0.0.4 — отчёт', text); }); }
+  function showReport() { var r = getReport(); if (!r) { noty(lang('report_missing')); return; } showText('KinoPUB Sync 0.1.0', r.summaryText || reportText()); }
+  function copyReport() { var text = reportText(); return copyText(text).then(function () { noty(lang('copied')); }).catch(function () { noty(lang('copy_failed')); showText('KinoPUB Sync 0.1.0 — отчёт', text); }); }
   function clearReport() { storageRemove(KEY.report); storageRemove(KEY.tokenStatus); storageSet(KEY.lastStatus, ''); noty(lang('report_cleared')); }
 
   function padImdb(id) {
@@ -725,8 +752,8 @@
 
   function availabilityReport() { return storageGet(KEY.availabilityReport, null); }
   function availabilityReportText() { var r = availabilityReport(); return r ? JSON.stringify(r, null, 2) : lang('availability_missing'); }
-  function showAvailabilityReport() { var r = availabilityReport(); if (!r) { noty(lang('availability_missing')); return; } showText('KinoPUB Sync 0.0.4 — доступность карточек', r.summaryText || JSON.stringify(r, null, 2)); }
-  function copyAvailabilityReport() { var text = availabilityReportText(); return copyText(text).then(function () { noty(lang('copied')); }).catch(function () { noty(lang('copy_failed')); showText('KinoPUB Sync 0.0.4 — доступность карточек', text); }); }
+  function showAvailabilityReport() { var r = availabilityReport(); if (!r) { noty(lang('availability_missing')); return; } showText('KinoPUB Sync 0.1.0 — доступность карточек', r.summaryText || JSON.stringify(r, null, 2)); }
+  function copyAvailabilityReport() { var text = availabilityReportText(); return copyText(text).then(function () { noty(lang('copied')); }).catch(function () { noty(lang('copy_failed')); showText('KinoPUB Sync 0.1.0 — доступность карточек', text); }); }
   function clearAvailabilityReport() { storageRemove(KEY.availabilityReport); noty(lang('availability_cleared')); }
 
   function checkOneAvailability(norm, index, total) {
@@ -741,6 +768,24 @@
       var e = errorSummary(err);
       var status = e.http === 404 ? 'not_found' : 'api_error';
       return { status: status, reason: status === 'not_found' ? 'GET /v1/items/<id> returned HTTP 404' : 'GET /v1/items/<id> failed', error: e, media: null };
+    });
+  }
+
+  function eachLimitSimple(list, limit, iterator) {
+    limit = Math.max(1, parseInt(limit, 10) || 1);
+    var index = 0;
+    var running = 0;
+    return new Promise(function (resolve, reject) {
+      function launch() {
+        if (index >= list.length && running <= 0) { resolve(true); return; }
+        while (running < limit && index < list.length) {
+          var item = list[index];
+          var current = index++;
+          running++;
+          Promise.resolve(iterator(item, current)).then(function () { running--; launch(); }).catch(function (err) { running--; reject(err); });
+        }
+      }
+      launch();
     });
   }
 
@@ -767,24 +812,19 @@
     };
     noty(lang('availability_checking'));
     setStatus(lang('availability_checking') + ' 0/' + list.length);
-    var chain = Promise.resolve();
-    for (var i = 0; i < list.length; i++) {
-      (function (norm, idx) {
-        chain = chain.then(function () {
-          return checkOneAvailability(norm, idx + 1, list.length).then(function (res) {
-            report.stats.checked++;
-            if (res.status === 'ok') report.stats.ok++;
-            else if (res.status === 'not_found') report.stats.notFound++;
-            else if (res.status === 'no_media') report.stats.noMedia++;
-            else if (res.status === 'skipped') report.stats.skipped++;
-            else report.stats.apiError++;
-            if (res.status !== 'ok') report.problemItems.push(availabilityProblemEntry(norm, res.status, res.reason, res.error, res.media));
-            else if (report.checkedSamples.length < 20) report.checkedSamples.push({ id: norm.id, title: norm.title, status: 'ok', links: itemLinks(norm), media: res.media });
-          });
-        });
-      })(list[i], i);
-    }
-    return chain.then(function () {
+    var availabilityConcurrency = 4;
+    return eachLimitSimple(list, availabilityConcurrency, function (norm, idx) {
+      return checkOneAvailability(norm, idx + 1, list.length).then(function (res) {
+        report.stats.checked++;
+        if (res.status === 'ok') report.stats.ok++;
+        else if (res.status === 'not_found') report.stats.notFound++;
+        else if (res.status === 'no_media') report.stats.noMedia++;
+        else if (res.status === 'skipped') report.stats.skipped++;
+        else report.stats.apiError++;
+        if (res.status !== 'ok') report.problemItems.push(availabilityProblemEntry(norm, res.status, res.reason, res.error, res.media));
+        else if (report.checkedSamples.length < 20) report.checkedSamples.push({ id: norm.id, title: norm.title, status: 'ok', links: itemLinks(norm), media: res.media });
+      });
+    }).then(function () {
       report.summaryText = buildAvailabilitySummary(report);
       storageSet(KEY.availabilityReport, report);
       setStatus(lang('availability_done') + ': OK ' + report.stats.ok + ', 404 ' + report.stats.notFound + ', noMedia ' + report.stats.noMedia + ', errors ' + report.stats.apiError);
@@ -829,6 +869,96 @@
     return removed;
   }
 
+  var OLD_SERVICE_KEYS = ['kp_sync_identity_map','kp_sync_episode_map','kp_sync_timeline_map','kp_sync_card_map','kp_sync_bookmark_snapshot','kp_sync_timeline_snapshot','kp_sync_push_folder_id','kp_sync_bookmark_snapshot_pending','kp_sync_delete_pending'];
+
+  function countObjectKeys(obj) { var n = 0; for (var k in obj) if (obj && obj.hasOwnProperty(k)) n++; return n; }
+
+  function addId(ids, id) { if (id !== undefined && id !== null && id !== '') ids[String(id)] = true; }
+
+  function collectOldSyncMaps() {
+    var ids = {}, hashes = {}, service = [];
+    function addHash(h) { if (h !== undefined && h !== null && h !== '') hashes[String(h)] = true; }
+    var identity = storageGet('kp_sync_identity_map', {}) || {};
+    if (identity && typeof identity === 'object') {
+      if (identity.byItem) {
+        for (var iid in identity.byItem) if (identity.byItem.hasOwnProperty(iid)) {
+          var e = identity.byItem[iid] || {};
+          addId(ids, e.lampa_card_id);
+          if (e.card) addId(ids, e.card.id);
+        }
+      }
+    }
+    var tm = storageGet('kp_sync_timeline_map', {}) || {};
+    if (tm && typeof tm === 'object') for (var th in tm) if (tm.hasOwnProperty(th)) addHash(th);
+    var ep = storageGet('kp_sync_episode_map', {}) || {};
+    if (ep && typeof ep === 'object' && ep.byHash) for (var eh in ep.byHash) if (ep.byHash.hasOwnProperty(eh)) addHash(eh);
+    var bm = storageGet('kp_sync_bookmark_snapshot', {}) || {};
+    if (bm && bm.items) for (var bi in bm.items) if (bm.items.hasOwnProperty(bi)) { var b = bm.items[bi] || {}; if (b.card) addId(ids, b.card.id); }
+    var ts = storageGet('kp_sync_timeline_snapshot', {}) || {};
+    if (ts && ts.items) for (var ti in ts.items) if (ts.items.hasOwnProperty(ti)) { var t = ts.items[ti] || {}; if (t.card) addId(ids, t.card.id); if (t.hash) addHash(t.hash); }
+    for (var i = 0; i < OLD_SERVICE_KEYS.length; i++) {
+      var key = OLD_SERVICE_KEYS[i];
+      var val = storageGet(key, null);
+      if (val !== null && val !== undefined && val !== '') service.push({ key: key, kind: typeof val, items: isObject(val) ? countObjectKeys(val) : (isArray(val) ? val.length : 1) });
+    }
+    return { ids: ids, hashes: hashes, serviceKeys: service };
+  }
+
+  function knownTimelineStorageKeys() {
+    var keys = {}, out = [];
+    function add(k) { if (!keys[k]) { keys[k] = true; out.push(k); } }
+    add('file_view');
+    add('timeline');
+    add('viewed');
+    for (var i = 0; i <= 20; i++) add('file_view_' + i);
+    try {
+      for (var j = 0; j < localStorage.length; j++) {
+        var k = localStorage.key(j);
+        if (k && k.indexOf('kp_sync_') !== 0 && (k.indexOf('file_view') === 0 || k.indexOf('timeline') >= 0)) add(k);
+      }
+    } catch (e) {}
+    return out;
+  }
+
+  function scanTimelineData(ids, hashes) {
+    var keys = knownTimelineStorageKeys();
+    var result = [];
+    for (var i = 0; i < keys.length; i++) {
+      var key = keys[i];
+      var obj = storageGet(key, null);
+      if (!obj || typeof obj !== 'object' || isArray(obj)) continue;
+      var total = 0, matches = 0, sample = [];
+      for (var h in obj) if (obj.hasOwnProperty(h)) {
+        total++;
+        var entry = obj[h] || {};
+        var card = entry.card || entry.data && entry.data.card;
+        var match = !!hashes[String(h)] || isOldSyncCard(card) || (card && ids[String(card.id)] && isOldSyncCard(card));
+        if (match) { matches++; if (sample.length < 20) sample.push({ hash: String(h), title: cardTitle(card), id: card && card.id }); }
+      }
+      if (matches) result.push({ key: key, total: total, matches: matches, sample: sample });
+    }
+    return result;
+  }
+
+  function removeTimelineData(ids, hashes) {
+    var keys = knownTimelineStorageKeys();
+    var removed = { timelineKeys: 0, timelineEntries: 0, byKey: [] };
+    for (var i = 0; i < keys.length; i++) {
+      var key = keys[i];
+      var obj = storageGet(key, null);
+      if (!obj || typeof obj !== 'object' || isArray(obj)) continue;
+      var local = 0;
+      for (var h in obj) if (obj.hasOwnProperty(h)) {
+        var entry = obj[h] || {};
+        var card = entry.card || entry.data && entry.data.card;
+        var match = !!hashes[String(h)] || isOldSyncCard(card) || (card && ids[String(card.id)] && isOldSyncCard(card));
+        if (match) { delete obj[h]; local++; }
+      }
+      if (local) { storageSet(key, obj); removed.timelineKeys++; removed.timelineEntries += local; removed.byKey.push({ key: key, removed: local }); }
+    }
+    return removed;
+  }
+
   function scanOldLampaBookmarks() {
     var fav = favoriteStorage();
     var custom = customFavoriteStorage();
@@ -836,7 +966,8 @@
     var customCards = custom.customTypes && custom.customTypes.card || [];
     var cardMap = mapCardsById(cards);
     var customCardMap = mapCardsById(customCards);
-    var suspectIds = {}, suspectCards = [], customTypes = [], arrays = { book: 0, book_movie: 0, book_tv: 0, custom: 0 };
+    var mapInfo = collectOldSyncMaps();
+    var suspectIds = {}, suspectCards = [], customTypes = [], arrays = { book: 0, book_movie: 0, book_tv: 0, history: 0, custom: 0, timeline: 0, serviceKeys: 0 };
     function markId(id, reason, card) {
       if (id == null || id === '') return;
       var sid = String(id);
@@ -844,6 +975,7 @@
     }
     for (var i = 0; i < cards.length; i++) if (isOldSyncCard(cards[i])) markId(cards[i].id, 'card_marker_in_favorite.card', cards[i]);
     for (var j = 0; j < customCards.length; j++) if (isOldSyncCard(customCards[j])) markId(customCards[j].id, 'card_marker_in_custom_favorite.card', customCards[j]);
+    for (var mid in mapInfo.ids) if (mapInfo.ids.hasOwnProperty(mid)) markId(mid, 'old_sync_service_map', cardMap[mid] || customCardMap[mid]);
     var types = custom.customTypes || {};
     for (var typeName in types) if (types.hasOwnProperty(typeName) && typeName !== 'card') {
       if (String(typeName).indexOf('KinoPUB:') === 0) {
@@ -856,10 +988,14 @@
     arrays.book = countIdsInArray(fav.book, suspectIds);
     arrays.book_movie = countIdsInArray(fav.book_movie, suspectIds);
     arrays.book_tv = countIdsInArray(fav.book_tv, suspectIds);
+    arrays.history = countIdsInArray(fav.history, suspectIds);
     for (var ct = 0; ct < customTypes.length; ct++) arrays.custom += customTypes[ct].items;
-    var report = { version: VERSION, generatedAt: nowIso(), source: 'local Lampa cleanup scan for old KinoPUB Sync imports', safeMode: 'only old Sync markers and custom folders named KinoPUB:*', tokensIncluded: false, suspectIdsCount: suspectCards.length, suspectIds: suspectCards.slice(0, 300), customTypesToRemove: customTypes, arraysAffected: arrays, applied: false };
+    var timelineMatches = scanTimelineData(suspectIds, mapInfo.hashes);
+    for (var tm_i = 0; tm_i < timelineMatches.length; tm_i++) arrays.timeline += timelineMatches[tm_i].matches || 0;
+    arrays.serviceKeys = mapInfo.serviceKeys.length;
+    var report = { version: VERSION, generatedAt: nowIso(), source: 'local Lampa cleanup scan for old KinoPUB Sync data', safeMode: 'only old Sync markers, KinoPUB:* custom folders, old kp_sync_* maps and timeline hashes linked by old maps', tokensIncluded: false, suspectIdsCount: suspectCards.length, suspectIds: suspectCards.slice(0, 500), customTypesToRemove: customTypes, timelineToRemove: timelineMatches, serviceKeysToRemove: mapInfo.serviceKeys, arraysAffected: arrays, applied: false };
     storageSet(KEY.cleanupReport, report);
-    setStatus(lang('cleanup_scanned') + ': найдено id ' + report.suspectIdsCount + ', папок ' + customTypes.length);
+    setStatus(lang('cleanup_scanned') + ': id ' + report.suspectIdsCount + ', папок ' + customTypes.length + ', history ' + arrays.history + ', timeline ' + arrays.timeline);
     noty(lang('cleanup_scanned'));
     return report;
   }
@@ -867,8 +1003,8 @@
   function countIdsInArray(arr, ids) { var n = 0; for (var i = 0; arr && i < arr.length; i++) if (ids[String(arr[i])]) n++; return n; }
   function cleanupReport() { return storageGet(KEY.cleanupReport, null); }
   function cleanupReportText() { var r = cleanupReport(); return r ? JSON.stringify(r, null, 2) : lang('cleanup_missing'); }
-  function showCleanupReport() { var r = cleanupReport(); if (!r) { noty(lang('cleanup_missing')); return; } showText('KinoPUB Sync 0.0.4 — очистка Lampa', JSON.stringify(r, null, 2)); }
-  function copyCleanupReport() { var text = cleanupReportText(); return copyText(text).then(function () { noty(lang('copied')); }).catch(function () { noty(lang('copy_failed')); showText('KinoPUB Sync 0.0.4 — очистка Lampa', text); }); }
+  function showCleanupReport() { var r = cleanupReport(); if (!r) { noty(lang('cleanup_missing')); return; } showText('KinoPUB Sync 0.1.0 — очистка Lampa', JSON.stringify(r, null, 2)); }
+  function copyCleanupReport() { var text = cleanupReportText(); return copyText(text).then(function () { noty(lang('copied')); }).catch(function () { noty(lang('copy_failed')); showText('KinoPUB Sync 0.1.0 — очистка Lampa', text); }); }
 
   function applyOldLampaCleanup() {
     var report = cleanupReport();
@@ -883,10 +1019,12 @@
     for (i = 0; i < report.suspectIds.length; i++) ids[String(report.suspectIds[i].id)] = true;
     var fav = favoriteStorage();
     var custom = customFavoriteStorage();
-    var removed = { book: 0, book_movie: 0, book_tv: 0, customFolders: 0, customItems: 0, favoriteCards: 0, customCards: 0 };
+    var mapInfo = collectOldSyncMaps();
+    var removed = { book: 0, book_movie: 0, book_tv: 0, history: 0, customFolders: 0, customItems: 0, favoriteCards: 0, customCards: 0, timelineKeys: 0, timelineEntries: 0, timelineByKey: [], serviceKeys: [] };
     removed.book = removeIdsFromArray(fav.book, ids);
     removed.book_movie = removeIdsFromArray(fav.book_movie, ids);
     removed.book_tv = removeIdsFromArray(fav.book_tv, ids);
+    removed.history = removeIdsFromArray(fav.history, ids);
     var types = custom.customTypes || {};
     for (var typeName in types) if (types.hasOwnProperty(typeName) && typeName !== 'card' && String(typeName).indexOf('KinoPUB:') === 0) {
       var uid = types[typeName];
@@ -904,49 +1042,61 @@
     }
     storageSet('favorite', fav);
     storageSet('custom_favorite', custom);
+    var tr = removeTimelineData(ids, mapInfo.hashes);
+    removed.timelineKeys = tr.timelineKeys; removed.timelineEntries = tr.timelineEntries; removed.timelineByKey = tr.byKey;
+    for (var sk = 0; sk < OLD_SERVICE_KEYS.length; sk++) {
+      var k = OLD_SERVICE_KEYS[sk];
+      var val = storageGet(k, null);
+      if (val !== null && val !== undefined && val !== '') { storageRemove(k); removed.serviceKeys.push(k); }
+    }
     report.applied = true; report.appliedAt = nowIso(); report.removed = removed;
     storageSet(KEY.cleanupReport, report);
-    setStatus(lang('cleanup_done') + ': book ' + removed.book + ', movie ' + removed.book_movie + ', tv ' + removed.book_tv + ', custom folders ' + removed.customFolders);
+    setStatus(lang('cleanup_done') + ': book ' + removed.book + ', movie ' + removed.book_movie + ', tv ' + removed.book_tv + ', history ' + removed.history + ', timeline ' + removed.timelineEntries + ', custom folders ' + removed.customFolders);
     noty(lang('cleanup_done'));
     return report;
   }
 
-  function addParam(name, type, def, values, title, descr, onChange) {
+  function addParamTo(component, name, type, def, values, title, descr, onChange) {
     try {
       if (!window.Lampa || !Lampa.SettingsApi || !Lampa.SettingsApi.addParam) return;
-      var param = { component: COMPONENT, name: name, type: type, 'default': def == null ? '' : def, values: values == null ? '' : values };
-      Lampa.SettingsApi.addParam({ component: COMPONENT, param: param, field: { name: title, description: descr || '' }, onChange: onChange || function () {} });
+      var param = { component: component, name: name, type: type, 'default': def == null ? '' : def, values: values == null ? '' : values };
+      Lampa.SettingsApi.addParam({ component: component, param: param, field: { name: title, description: descr || '' }, onChange: onChange || function () {} });
     } catch (e) { log('settings param failed', name, e && e.message); }
   }
+
+  function addParam(name, type, def, values, title, descr, onChange) { return addParamTo(COMPONENT, name, type, def, values, title, descr, onChange); }
+  function addCleanupParam(name, type, def, values, title, descr, onChange) { return addParamTo(COMPONENT_CLEANUP, name, type, def, values, title, descr, onChange); }
 
   function addSettings() {
     try {
       if (!window.Lampa || !Lampa.SettingsApi || !Lampa.SettingsApi.addComponent) return;
-      Lampa.SettingsApi.addComponent({ component: COMPONENT, name: lang('component'), icon: '<svg width="24" height="24" viewBox="0 0 24 24"><path fill="currentColor" d="M12 3a9 9 0 0 0-9 9h2a7 7 0 0 1 11.95-4.95L15 9h6V3l-2.62 2.62A8.97 8.97 0 0 0 12 3Zm7 9a7 7 0 0 1-11.95 4.95L9 15H3v6l2.62-2.62A9 9 0 0 0 21 12h-2Z"/></svg>' });
-      addParam('kp_sync004_sep_main', 'title', '', '', lang('sep'), lang('sep_descr'));
+      var icon = '<svg width="24" height="24" viewBox="0 0 24 24"><path fill="currentColor" d="M12 3a9 9 0 0 0-9 9h2a7 7 0 0 1 11.95-4.95L15 9h6V3l-2.62 2.62A8.97 8.97 0 0 0 12 3Zm7 9a7 7 0 0 1-11.95 4.95L9 15H3v6l2.62-2.62A9 9 0 0 0 21 12h-2Z"/></svg>';
+      Lampa.SettingsApi.addComponent({ component: COMPONENT, name: lang('component'), icon: icon });
+      addParam('kp_sync010_sep_main', 'title', '', '', lang('sep'), lang('sep_descr'));
       addParam(KEY.lastStatus, 'input', storageGet(KEY.lastStatus, '') || '', '', lang('status'), lang('status_descr'));
-      addParam('kp_sync004_action_check_token', 'button', '', '', lang('check_token'), lang('check_token_descr'), function () { checkToken(); });
-      addParam('kp_sync004_action_read_bookmarks', 'button', '', '', lang('read_bookmarks'), lang('read_bookmarks_descr'), function () { readBookmarks(); });
-      addParam('kp_sync004_action_show_report', 'button', '', '', lang('show_report'), lang('show_report_descr'), function () { showReport(); });
-      addParam('kp_sync004_action_copy_report', 'button', '', '', lang('copy_report'), lang('copy_report_descr'), function () { copyReport(); });
-      addParam('kp_sync004_action_clear_report', 'button', '', '', lang('clear_report'), lang('clear_report_descr'), function () { clearReport(); });
-      addParam('kp_sync004_sep_availability', 'title', '', '', lang('sep_availability'), lang('sep_availability_descr'));
+      addParam('kp_sync010_action_check_token', 'button', '', '', lang('check_token'), lang('check_token_descr'), function () { checkToken(); });
+      addParam('kp_sync010_action_read_bookmarks', 'button', '', '', lang('read_bookmarks'), lang('read_bookmarks_descr'), function () { readBookmarks(); });
+      addParam('kp_sync010_action_show_report', 'button', '', '', lang('show_report'), lang('show_report_descr'), function () { showReport(); });
+      addParam('kp_sync010_action_copy_report', 'button', '', '', lang('copy_report'), lang('copy_report_descr'), function () { copyReport(); });
+      addParam('kp_sync010_action_clear_report', 'button', '', '', lang('clear_report'), lang('clear_report_descr'), function () { clearReport(); });
+      addParam('kp_sync010_sep_availability', 'title', '', '', lang('sep_availability'), lang('sep_availability_descr'));
       addParam(KEY.availabilityLimit, 'input', storageGet(KEY.availabilityLimit, 0) || 0, '', lang('availability_limit'), lang('availability_limit_descr'));
-      addParam('kp_sync004_action_check_availability', 'button', '', '', lang('check_availability'), lang('check_availability_descr'), function () { checkAvailability(); });
-      addParam('kp_sync004_action_show_availability', 'button', '', '', lang('show_availability'), lang('show_availability_descr'), function () { showAvailabilityReport(); });
-      addParam('kp_sync004_action_copy_availability', 'button', '', '', lang('copy_availability'), lang('copy_availability_descr'), function () { copyAvailabilityReport(); });
-      addParam('kp_sync004_action_clear_availability', 'button', '', '', lang('clear_availability'), lang('clear_availability_descr'), function () { clearAvailabilityReport(); });
-      addParam('kp_sync004_sep_cleanup', 'title', '', '', lang('sep_cleanup'), lang('sep_cleanup_descr'));
-      addParam('kp_sync004_action_scan_bad_lampa', 'button', '', '', lang('scan_bad_lampa'), lang('scan_bad_lampa_descr'), function () { scanOldLampaBookmarks(); });
-      addParam('kp_sync004_action_show_cleanup', 'button', '', '', lang('show_cleanup'), lang('show_cleanup_descr'), function () { showCleanupReport(); });
-      addParam('kp_sync004_action_copy_cleanup', 'button', '', '', lang('copy_cleanup'), lang('copy_cleanup_descr'), function () { copyCleanupReport(); });
-      addParam('kp_sync004_action_clear_bad_lampa', 'button', '', '', lang('clear_bad_lampa'), lang('clear_bad_lampa_descr'), function () { applyOldLampaCleanup(); });
+      addParam('kp_sync010_action_check_availability', 'button', '', '', lang('check_availability'), lang('check_availability_descr'), function () { checkAvailability(); });
+      addParam('kp_sync010_action_show_availability', 'button', '', '', lang('show_availability'), lang('show_availability_descr'), function () { showAvailabilityReport(); });
+      addParam('kp_sync010_action_copy_availability', 'button', '', '', lang('copy_availability'), lang('copy_availability_descr'), function () { copyAvailabilityReport(); });
+      addParam('kp_sync010_action_clear_availability', 'button', '', '', lang('clear_availability'), lang('clear_availability_descr'), function () { clearAvailabilityReport(); });
+      Lampa.SettingsApi.addComponent({ component: COMPONENT_CLEANUP, name: lang('component_cleanup'), icon: icon });
+      addCleanupParam('kp_sync010_sep_cleanup', 'title', '', '', lang('sep_cleanup'), lang('sep_cleanup_descr'));
+      addCleanupParam('kp_sync010_action_scan_bad_lampa', 'button', '', '', lang('scan_bad_lampa'), lang('scan_bad_lampa_descr'), function () { scanOldLampaBookmarks(); });
+      addCleanupParam('kp_sync010_action_show_cleanup', 'button', '', '', lang('show_cleanup'), lang('show_cleanup_descr'), function () { showCleanupReport(); });
+      addCleanupParam('kp_sync010_action_copy_cleanup', 'button', '', '', lang('copy_cleanup'), lang('copy_cleanup_descr'), function () { copyCleanupReport(); });
+      addCleanupParam('kp_sync010_action_clear_bad_lampa', 'button', '', '', lang('clear_bad_lampa'), lang('clear_bad_lampa_descr'), function () { applyOldLampaCleanup(); });
     } catch (e) { log('settings failed', e && e.message); }
   }
 
   function start() {
-    if (window.KinoPubSync004 && window.KinoPubSync004._started) return;
-    window.KinoPubSync004 = {
+    if (window.KinoPubSync010 && window.KinoPubSync010._started) return;
+    window.KinoPubSync010 = {
       _started: true,
       version: VERSION,
       edition: EDITION,
@@ -972,8 +1122,9 @@
       status: function () { return storageGet(KEY.lastStatus, ''); },
       tokenStatus: function () { return storageGet(KEY.tokenStatus, null); }
     };
+    window.KinoPubSync = window.KinoPubSync010;
     addSettings();
-    log('started', 'read-only audit build with local Lampa cleanup tools');
+    log('started', 'read-only audit build with data cleanup tools');
   }
 
   if (window.appready) start();
