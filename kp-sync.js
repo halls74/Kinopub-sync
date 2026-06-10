@@ -1,10 +1,10 @@
 (function () {
   'use strict';
 
-  var VERSION = '0.1.5';
+  var VERSION = '0.1.7';
   var EDITION = 'alpha-readonly-match';
   var COMPONENT = 'kp_sync_alpha';
-  var LOG = '[KinoPUB Sync 0.1.5]';
+  var LOG = '[KinoPUB Sync 0.1.7]';
   var API_HOST = 'https://api.service-kp.com';
   var CLIENT_ID = 'xbmc';
   var CLIENT_SECRET = 'cgg3gtifu46urtfp2zp1nqtba0k2ezxh';
@@ -19,16 +19,17 @@
   var KEY = {
     token: 'kp_token',
     refresh: 'kp_refresh',
-    lastStatus: 'kp_sync015_last_status',
-    report: 'kp_sync015_bookmarks_report',
-    tokenStatus: 'kp_sync015_token_status',
-    cleanupReport: 'kp_sync015_lampa_cleanup_report',
-    matchReport: 'kp_sync015_match_report',
-    matchLimit: 'kp_sync015_match_limit',
-    tmdbDiag: 'kp_sync015_tmdb_diag'
+    lastStatus: 'kp_sync017_last_status',
+    report: 'kp_sync017_bookmarks_report',
+    tokenStatus: 'kp_sync017_token_status',
+    cleanupReport: 'kp_sync017_lampa_cleanup_report',
+    matchReport: 'kp_sync017_match_report',
+    matchLimit: 'kp_sync017_match_limit',
+    tmdbProxyEmail: 'kp_sync017_tmdb_proxy_email',
+    tmdbDiag: 'kp_sync017_tmdb_diag'
   };
 
-  if (window.KinoPubSync015 && window.KinoPubSync015.version === VERSION) return;
+  if (window.KinoPubSync017 && window.KinoPubSync017.version === VERSION) return;
 
   function nowIso() {
     try { return new Date().toISOString(); } catch (e) { return String(Date.now()); }
@@ -63,7 +64,7 @@
 
   function lang(key) {
     var ru = {
-      component: 'KinoPUB Sync 0.1.5',
+      component: 'KinoPUB Sync 0.1.7',
       sep: '— Проверка и чтение KinoPUB —',
       sep_descr: 'Alpha-сборка: чтение KinoPUB и read-only сопоставление с TMDB/Lampa. Ничего не импортирует в Lampa и ничего не меняет в KinoPUB.',
       cleanup_menu: 'Очистка данных',
@@ -93,9 +94,11 @@
       sep_match: '— Сопоставление KinoPUB → Lampa/TMDB —',
       sep_match_descr: 'Read-only проверка готовности к импорту: берёт уникальные KinoPUB item id из последнего отчёта закладок, ищет настоящие TMDB/Lampa-карточки по IMDb через Lampa.TMDB.api или TMDB Proxy fallback и разделяет результат на importCandidates и blockedItems. Перед массовой проверкой выполняется быстрый TMDB preflight; при таймаутах массовая проверка останавливается, чтобы не ждать десятки минут. Ничего не импортирует.',
       match_limit: 'Лимит сопоставления',
-      match_limit_descr: '0 = проверить все уникальные карточки из последнего отчёта. Для короткой проверки можно указать 10, 25, 50 или 100. Если TMDB недоступен, v0.1.5 остановится после preflight/серии таймаутов.',
+      match_limit_descr: '0 = проверить все уникальные карточки из последнего отчёта. Для короткой проверки можно указать 10, 25, 50 или 100. Если TMDB недоступен, v0.1.7 остановится после preflight/серии таймаутов.',
+      tmdb_proxy_email: 'TMDB Proxy email (необязательно)',
+      tmdb_proxy_email_descr: 'Необязательный email-параметр для CUB TMDB Proxy. Оставьте пустым, если Lampa работает без него. Плагин больше не подставляет test@mail.ru автоматически.',
       test_tmdb: 'Проверить TMDB/Lampa API',
-      test_tmdb_descr: 'Быстрый preflight: проверяет Lampa.TMDB.api, затем пробует прямой TMDB Proxy fallback через домен CUB и backup. Ничего не импортирует и не открывает alert автоматически.',
+      test_tmdb_descr: 'Быстрый preflight: проверяет Lampa.TMDB.api, затем пробует прямой TMDB Proxy fallback через рабочие CUB-домены cub.rip/cub.red и backup. Ничего не импортирует и не открывает alert автоматически.',
       show_tmdb_diag: 'Показать диагностику TMDB/Lampa',
       show_tmdb_diag_descr: 'Показывает последний результат проверки TMDB/Lampa API: доступность Lampa.TMDB.api, прямого TMDB Proxy, время ответа, ошибку или найденные counts.',
       copy_tmdb_diag: 'Скопировать диагностику TMDB/Lampa',
@@ -683,7 +686,7 @@
       if (dupLines.length > 20) lines.push('- ... ещё ' + (dupLines.length - 20));
       lines.push('');
     }
-    lines.push('Важно: v0.1.5 ничего не импортирует в Lampa и ничего не меняет в KinoPUB. Очистка данных Lampa находится в основных настройках плагина и выполняется только после сканирования и подтверждения.');
+    lines.push('Важно: v0.1.7 ничего не импортирует в Lampa и ничего не меняет в KinoPUB. Очистка данных Lampa находится в основных настройках плагина и выполняется только после сканирования и подтверждения.');
     return lines.join('\n');
   }
 
@@ -746,8 +749,8 @@
 
   function getReport() { return storageGet(KEY.report, null); }
   function reportText() { var r = getReport(); return r ? JSON.stringify(r, null, 2) : lang('report_missing'); }
-  function showReport() { var r = getReport(); if (!r) { noty(lang('report_missing')); return; } showText('KinoPUB Sync 0.1.5', r.summaryText || reportText()); }
-  function copyReport() { var text = reportText(); return copyText(text).then(function () { noty(lang('copied')); }).catch(function () { noty(lang('copy_failed')); showText('KinoPUB Sync 0.1.5 — отчёт', text); }); }
+  function showReport() { var r = getReport(); if (!r) { noty(lang('report_missing')); return; } showText('KinoPUB Sync 0.1.7', r.summaryText || reportText()); }
+  function copyReport() { var text = reportText(); return copyText(text).then(function () { noty(lang('copied')); }).catch(function () { noty(lang('copy_failed')); showText('KinoPUB Sync 0.1.7 — отчёт', text); }); }
   function clearReport() { storageRemove(KEY.report); storageRemove(KEY.tokenStatus); storageSet(KEY.lastStatus, ''); noty(lang('report_cleared')); }
 
   function padImdb(id) {
@@ -797,6 +800,105 @@
     };
   }
 
+  function tmdbApiKey() {
+    try {
+      if (window.Lampa && Lampa.TMDB) {
+        var k = Lampa.TMDB.key;
+        if (typeof k === 'function') k = k();
+        if (k) return String(k);
+      }
+    } catch (e) {}
+    try {
+      var keys = ['tmdb_key', 'tmdb_api_key', 'api_key'];
+      for (var i = 0; i < keys.length; i++) {
+        var v = storageGet(keys[i], '');
+        if (v) return String(v);
+      }
+    } catch (e2) {}
+    return '';
+  }
+
+  function looksLikeEmail(v) {
+    v = String(v || '').trim();
+    return v && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+  }
+
+  function extractEmail(v, depth) {
+    if (depth == null) depth = 0;
+    if (depth > 3 || v == null) return '';
+    if (typeof v === 'string') return looksLikeEmail(v) ? v.trim() : '';
+    if (typeof v === 'function') {
+      try { return extractEmail(v(), depth + 1); } catch (e0) { return ''; }
+    }
+    if (!isObject(v)) return '';
+    var keys = ['email', 'mail', 'account_email', 'cub_email', 'user_email'];
+    for (var i = 0; i < keys.length; i++) {
+      if (v[keys[i]] != null) {
+        var direct = extractEmail(v[keys[i]], depth + 1);
+        if (direct) return direct;
+      }
+    }
+    var nested = ['account', 'profile', 'user', 'cub', 'data', 'result'];
+    for (var j = 0; j < nested.length; j++) {
+      if (v[nested[j]] != null) {
+        var n = extractEmail(v[nested[j]], depth + 1);
+        if (n) return n;
+      }
+    }
+    return '';
+  }
+
+  function tmdbProxyEmail() {
+    try {
+      var manual = storageGet(KEY.tmdbProxyEmail, '');
+      if (looksLikeEmail(manual)) return String(manual).trim();
+    } catch (e0) {}
+    try {
+      var keys = ['account_email', 'cub_email', 'email', 'account', 'profile', 'user', 'cub'];
+      for (var i = 0; i < keys.length; i++) {
+        var v = storageGet(keys[i], '');
+        var found = extractEmail(v);
+        if (found) return found;
+      }
+    } catch (e) {}
+    try {
+      var sources = [window.Lampa && Lampa.Account, window.Lampa && Lampa.Profile, window.Lampa && Lampa.Storage];
+      for (var s = 0; s < sources.length; s++) {
+        var email = extractEmail(sources[s]);
+        if (email) return email;
+      }
+    } catch (e2) {}
+    return '';
+  }
+
+  function tmdbRequestParams(params, includeProxyEmail) {
+    var out = {};
+    params = params || {};
+    for (var k in params) if (params.hasOwnProperty(k)) out[k] = params[k];
+    if (!out.api_key) {
+      var key = tmdbApiKey();
+      if (key) out.api_key = key;
+    }
+    if (!out.language) out.language = 'ru';
+    if (out.page === undefined || out.page === null) out.page = 1;
+    if (includeProxyEmail && !out.email) {
+      var em = tmdbProxyEmail();
+      if (em) out.email = em;
+    }
+    return out;
+  }
+
+  function tmdbRequestPath(path, params) {
+    return addUrlParams(path, tmdbRequestParams(params || {}, false));
+  }
+
+  function redactUrl(url) {
+    return String(url || '')
+      .replace(/api_key=([^&]+)/gi, 'api_key=***')
+      .replace(/email=([^&]+)/gi, 'email=***')
+      .replace(/access_token=([^&]+)/gi, 'access_token=***');
+  }
+
   function tmdbApiLampa(path, params) {
     return new Promise(function (resolve, reject) {
       if (!window.Lampa || !Lampa.TMDB || !Lampa.TMDB.api) {
@@ -816,13 +918,13 @@
         resolve(parsed);
       }
       function fail(err) { if (done) return; done = true; clearTimeout(timer); reject(err || { status: 'tmdb_error', provider: 'lampa_tmdb_api' }); }
-      var url = addUrlParams(path, params || {});
+      var url = tmdbRequestPath(path, params || {});
       try {
         var r = Lampa.TMDB.api(url, ok, fail);
         if (r && typeof r.then === 'function') r.then(ok).catch(fail);
       } catch (e1) {
         try {
-          var r2 = Lampa.TMDB.api(path, params || {}, ok, fail);
+          var r2 = Lampa.TMDB.api(path, tmdbRequestParams(params || {}, false), ok, fail);
           if (r2 && typeof r2.then === 'function') r2.then(ok).catch(fail);
         } catch (e2) {
           fail({ status: 'tmdb_exception', provider: 'lampa_tmdb_api', message: String((e2 && e2.message) || (e1 && e1.message) || e2 || e1) });
@@ -841,15 +943,27 @@
     return d || 'cub.red';
   }
 
-  function tmdbProxyUrls(path, params) {
+  function tmdbProxyDomains() {
     var cd = cubDomain();
+    var list = ['cub.rip', cd, 'cub.red'];
+    var out = [];
+    for (var i = 0; i < list.length; i++) {
+      var d = String(list[i] || '').replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim();
+      if (d && out.indexOf(d) < 0) out.push(d);
+    }
+    return out;
+  }
+
+  function tmdbProxyUrls(path, params) {
     var cleanPath = String(path || '').replace(/^\/+/, '');
-    var qs = encodeParams(params || {});
+    var qs = encodeParams(tmdbRequestParams(params || {}, true));
     var suffix = cleanPath + (qs ? '?' + qs : '');
-    var out = [
-      { provider: 'tmdb_proxy_cub', url: 'https://apitmdb.' + cd + '/3/' + suffix },
-      { provider: 'tmdb_proxy_backup', url: 'https://lampa.byskaz.ru/tmdb/api/3/' + suffix }
-    ];
+    var out = [];
+    var domains = tmdbProxyDomains();
+    for (var i = 0; i < domains.length; i++) {
+      out.push({ provider: 'tmdb_proxy_' + domains[i].replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '').toLowerCase(), url: 'https://apitmdb.' + domains[i] + '/3/' + suffix });
+    }
+    out.push({ provider: 'tmdb_proxy_backup', url: 'https://lampa.byskaz.ru/tmdb/api/3/' + suffix });
     return out;
   }
 
@@ -857,7 +971,7 @@
     return new Promise(function (resolve, reject) {
       var done = false;
       var timer = setTimeout(function () {
-        if (!done) { done = true; reject({ status: 'timeout', provider: provider, message: 'Proxy timeout', url: url }); }
+        if (!done) { done = true; reject({ status: 'timeout', provider: provider, message: 'Proxy timeout', url: redactUrl(url) }); }
       }, MATCH_TIMEOUT_MS);
       function ok(json) {
         if (done) return;
@@ -871,22 +985,31 @@
         if (done) return;
         done = true;
         clearTimeout(timer);
-        reject(err || { status: 'proxy_error', provider: provider, url: url });
+        if (err && err.url) err.url = redactUrl(err.url);
+        reject(err || { status: 'proxy_error', provider: provider, url: redactUrl(url) });
       }
-      try {
-        if (window.fetch) {
+
+      function tryFetch() {
+        try {
+          if (!window.fetch) return false;
           window.fetch(url, { cache: 'no-store' }).then(function (r) {
             if (!r || !r.ok) { fail({ status: 'http_error', provider: provider, http: r && r.status, statusText: r && r.statusText, url: url }); return; }
-            r.text().then(function (text) { ok(text); }).catch(fail);
+            r.text().then(function (text) { ok(text); }).catch(function (e) { fail({ status: 'fetch_read_error', provider: provider, message: String(e && e.message || e), url: url }); });
           }).catch(function (e) { fail({ status: 'fetch_error', provider: provider, message: String(e && e.message || e), url: url }); });
+          return true;
+        } catch (e1) { return false; }
+      }
+
+      try {
+        if (window.Lampa && Lampa.Reguest) {
+          var net = new Lampa.Reguest();
+          try { if (net.timeout) net.timeout(MATCH_TIMEOUT_MS); } catch (e2) {}
+          net.silent(url, function (json) { ok(json); }, function (xhr, status) { fail({ status: status || 'request_error', provider: provider, http: xhr && xhr.status, url: url }); }, false, {});
           return;
         }
-      } catch (e1) {}
-      try {
-        var net = new Lampa.Reguest();
-        try { if (net.timeout) net.timeout(MATCH_TIMEOUT_MS); } catch (e2) {}
-        net.silent(url, function (json) { ok(json); }, function (xhr, status) { fail({ status: status || 'request_error', provider: provider, http: xhr && xhr.status, url: url }); }, false, {});
-      } catch (e3) { fail({ status: 'request_exception', provider: provider, message: String(e3 && e3.message || e3), url: url }); }
+      } catch (e3) {}
+
+      if (!tryFetch()) fail({ status: 'request_exception', provider: provider, message: 'No fetch or Lampa.Reguest available', url: url });
     });
   }
 
@@ -941,7 +1064,8 @@
       locationProtocol: (window.location && window.location.protocol) || '',
       locationHost: (window.location && window.location.host) || '',
       lampaTmdbKeys: [],
-      proxyUrls: tmdbProxyUrls('find/' + encodeURIComponent(imdb), { external_source: 'imdb_id' }).map(function (x) { return { provider: x.provider, url: x.url.replace(/external_source=.*/, 'external_source=imdb_id') }; }),
+      proxyEmailPresent: !!tmdbProxyEmail(),
+      proxyUrls: tmdbProxyUrls('find/' + encodeURIComponent(imdb), { external_source: 'imdb_id' }).map(function (x) { return { provider: x.provider, url: redactUrl(x.url) }; }),
       methods: [],
       recommendation: ''
     };
@@ -959,7 +1083,7 @@
 
     function record(provider, url, runner) {
       var ms = Date.now();
-      var item = { provider: provider, url: url || '', ok: false, durationMs: 0, error: null, rawCounts: null };
+      var item = { provider: provider, url: url ? redactUrl(url) : '', ok: false, durationMs: 0, error: null, rawCounts: null };
       diag.methods.push(item);
       return runner().then(function (json) {
         item.ok = true;
@@ -991,7 +1115,7 @@
       diag.durationMs = Date.now() - started;
       diag.provider = '';
       diag.error = { status: 'all_tmdb_methods_failed', message: 'all_tmdb_methods_failed', methods: diag.methods.map(function (m) { return { provider: m.provider, ok: m.ok, durationMs: m.durationMs, error: m.error }; }) };
-      diag.recommendation = 'Все методы TMDB не ответили: Lampa.TMDB.api и прямые TMDB Proxy URL. Проверьте, открываются ли фильмы/постеры TMDB в самой Lampa; если нет — проблема вне KinoPUB Sync. Если TMDB Proxy установлен, проверьте доступность доменов apitmdb.' + diag.cubDomain + ' и lampa.byskaz.ru с этого устройства.';
+      diag.recommendation = 'Все методы TMDB не ответили: Lampa.TMDB.api и прямые TMDB Proxy URL. Проверьте, открываются ли фильмы/постеры TMDB в самой Lampa; если нет — проблема вне KinoPUB Sync. Проверьте доступность apitmdb.cub.rip / apitmdb.' + diag.cubDomain + ' / lampa.byskaz.ru с этого устройства.';
       storageSet(KEY.tmdbDiag, diag);
       return diag;
     }
@@ -1041,6 +1165,7 @@
     lines.push('CUB домен: ' + (diag.cubDomain || ''));
     if (diag.locationProtocol || diag.locationHost) lines.push('Lampa URL: ' + (diag.locationProtocol || '') + '//' + (diag.locationHost || ''));
     if (diag.lampaTmdbKeys && diag.lampaTmdbKeys.length) lines.push('Lampa.TMDB keys: ' + diag.lampaTmdbKeys.join(', '));
+    lines.push('TMDB Proxy email: ' + (diag.proxyEmailPresent ? 'найден/задан' : 'не задан; параметр email не добавляется'));
     if (diag.proxyUrls) lines.push('TMDB Proxy URLs: ' + JSON.stringify(diag.proxyUrls));
     lines.push('Таймаут на метод: ' + (diag.timeoutMs || MATCH_TIMEOUT_MS) + ' ms');
     lines.push('Результат: ' + (diag.ok ? 'OK' : 'ERROR'));
@@ -1274,7 +1399,7 @@
       source: 'KinoPUB -> TMDB/Lampa read-only import readiness audit',
       basedOnBookmarksReportAt: bm.generatedAt || '',
       tokensIncluded: false,
-      mode: { requestedTotal: items.length, checkedTotal: selected.length, limit: limit, timeoutMs: MATCH_TIMEOUT_MS, concurrency: MATCH_CONCURRENCY, abortApiErrors: MATCH_ABORT_API_ERRORS, note: 'Only resolved TMDB/Lampa cards found by IMDb are import candidates. Kinopoisk ID is diagnostic unless a reliable Kinopoisk->TMDB/Lampa resolver is implemented. No import. v0.1.5 uses TMDB preflight, tries Lampa.TMDB.api and TMDB Proxy fallback, and stops early on repeated API timeouts/errors.' },
+      mode: { requestedTotal: items.length, checkedTotal: selected.length, limit: limit, timeoutMs: MATCH_TIMEOUT_MS, concurrency: MATCH_CONCURRENCY, abortApiErrors: MATCH_ABORT_API_ERRORS, note: 'Only resolved TMDB/Lampa cards found by IMDb are import candidates. Kinopoisk ID is diagnostic unless a reliable Kinopoisk->TMDB/Lampa resolver is implemented. No import. v0.1.7 uses TMDB preflight, tries Lampa.TMDB.api and TMDB Proxy fallback, and stops early on repeated API timeouts/errors.' },
       tmdbPreflight: null,
       aborted: false,
       abortReason: '',
@@ -1364,8 +1489,8 @@
 
   function getMatchReport() { return storageGet(KEY.matchReport, null); }
   function matchReportText() { var r = getMatchReport(); return r ? JSON.stringify(r, null, 2) : lang('match_missing'); }
-  function showMatchReport() { var r = getMatchReport(); if (!r) { noty(lang('match_missing')); return; } showText('KinoPUB Sync 0.1.5 — готовность импорта', r.summaryText || matchReportText()); }
-  function copyMatchReport() { var text = matchReportText(); return copyText(text).then(function () { noty(lang('copied')); }).catch(function () { noty(lang('copy_failed')); showText('KinoPUB Sync 0.1.5 — отчёт готовности импорта', text); }); }
+  function showMatchReport() { var r = getMatchReport(); if (!r) { noty(lang('match_missing')); return; } showText('KinoPUB Sync 0.1.7 — готовность импорта', r.summaryText || matchReportText()); }
+  function copyMatchReport() { var text = matchReportText(); return copyText(text).then(function () { noty(lang('copied')); }).catch(function () { noty(lang('copy_failed')); showText('KinoPUB Sync 0.1.7 — отчёт готовности импорта', text); }); }
   function clearMatchReport() { storageRemove(KEY.matchReport); noty(lang('match_report_cleared')); }
 
   function favoriteStorage() { var fav = storageGet('favorite', {}) || {}; if (typeof fav === 'string') fav = parseJson(fav) || {}; return fav && typeof fav === 'object' ? fav : {}; }
@@ -1531,8 +1656,8 @@
   function countIdsInArray(arr, ids) { var n = 0; for (var i = 0; arr && i < arr.length; i++) if (ids[String(arr[i])]) n++; return n; }
   function cleanupReport() { return storageGet(KEY.cleanupReport, null); }
   function cleanupReportText() { var r = cleanupReport(); return r ? JSON.stringify(r, null, 2) : lang('cleanup_missing'); }
-  function showCleanupReport() { var r = cleanupReport(); if (!r) { noty(lang('cleanup_missing')); return; } showText('KinoPUB Sync 0.1.5 — очистка Lampa', JSON.stringify(r, null, 2)); }
-  function copyCleanupReport() { var text = cleanupReportText(); return copyText(text).then(function () { noty(lang('copied')); }).catch(function () { noty(lang('copy_failed')); showText('KinoPUB Sync 0.1.5 — очистка Lampa', text); }); }
+  function showCleanupReport() { var r = cleanupReport(); if (!r) { noty(lang('cleanup_missing')); return; } showText('KinoPUB Sync 0.1.7 — очистка Lampa', JSON.stringify(r, null, 2)); }
+  function copyCleanupReport() { var text = cleanupReportText(); return copyText(text).then(function () { noty(lang('copied')); }).catch(function () { noty(lang('copy_failed')); showText('KinoPUB Sync 0.1.7 — очистка Lampa', text); }); }
 
   function applyOldLampaCleanup() {
     var report = cleanupReport();
@@ -1586,7 +1711,7 @@
 
 
   function showCleanupMenu() {
-    var apiName = 'KinoPubSync015';
+    var apiName = 'KinoPubSync017';
     var btnStyle = 'display:block;width:100%;margin:.45em 0;padding:.65em .75em;border-radius:.45em;border:0;background:#3f51b5;color:#fff;text-align:left;font-size:1em;';
     var smallStyle = 'font-size:.85em;opacity:.75;margin:.25em 0 .75em 0;line-height:1.35';
     function action(fn) {
@@ -1630,33 +1755,34 @@
       if (!window.Lampa || !Lampa.SettingsApi || !Lampa.SettingsApi.addComponent) return;
       var icon = '<svg width="24" height="24" viewBox="0 0 24 24"><path fill="currentColor" d="M12 3a9 9 0 0 0-9 9h2a7 7 0 0 1 11.95-4.95L15 9h6V3l-2.62 2.62A8.97 8.97 0 0 0 12 3Zm7 9a7 7 0 0 1-11.95 4.95L9 15H3v6l2.62-2.62A9 9 0 0 0 21 12h-2Z"/></svg>';
       Lampa.SettingsApi.addComponent({ component: COMPONENT, name: lang('component'), icon: icon });
-      addParam('kp_sync015_sep_main', 'title', '', '', lang('sep'), lang('sep_descr'));
+      addParam('kp_sync017_sep_main', 'title', '', '', lang('sep'), lang('sep_descr'));
       addParam(KEY.lastStatus, 'input', storageGet(KEY.lastStatus, '') || '', '', lang('status'), lang('status_descr'));
-      addParam('kp_sync015_action_check_token', 'button', '', '', lang('check_token'), lang('check_token_descr'), function () { checkToken(); });
-      addParam('kp_sync015_action_read_bookmarks', 'button', '', '', lang('read_bookmarks'), lang('read_bookmarks_descr'), function () { readBookmarks(); });
-      addParam('kp_sync015_action_show_report', 'button', '', '', lang('show_report'), lang('show_report_descr'), function () { showReport(); });
-      addParam('kp_sync015_action_copy_report', 'button', '', '', lang('copy_report'), lang('copy_report_descr'), function () { copyReport(); });
-      addParam('kp_sync015_action_clear_report', 'button', '', '', lang('clear_report'), lang('clear_report_descr'), function () { clearReport(); });
-      addParam('kp_sync015_sep_match', 'title', '', '', lang('sep_match'), lang('sep_match_descr'));
+      addParam('kp_sync017_action_check_token', 'button', '', '', lang('check_token'), lang('check_token_descr'), function () { checkToken(); });
+      addParam('kp_sync017_action_read_bookmarks', 'button', '', '', lang('read_bookmarks'), lang('read_bookmarks_descr'), function () { readBookmarks(); });
+      addParam('kp_sync017_action_show_report', 'button', '', '', lang('show_report'), lang('show_report_descr'), function () { showReport(); });
+      addParam('kp_sync017_action_copy_report', 'button', '', '', lang('copy_report'), lang('copy_report_descr'), function () { copyReport(); });
+      addParam('kp_sync017_action_clear_report', 'button', '', '', lang('clear_report'), lang('clear_report_descr'), function () { clearReport(); });
+      addParam('kp_sync017_sep_match', 'title', '', '', lang('sep_match'), lang('sep_match_descr'));
       addParam(KEY.matchLimit, 'input', storageGet(KEY.matchLimit, '0') || '0', '', lang('match_limit'), lang('match_limit_descr'));
-      addParam('kp_sync015_action_test_tmdb', 'button', '', '', lang('test_tmdb'), lang('test_tmdb_descr'), function () { diagnoseTmdbApi(); });
-      addParam('kp_sync015_action_show_tmdb_diag', 'button', '', '', lang('show_tmdb_diag'), lang('show_tmdb_diag_descr'), function () { showTmdbDiag(); });
-      addParam('kp_sync015_action_copy_tmdb_diag', 'button', '', '', lang('copy_tmdb_diag'), lang('copy_tmdb_diag_descr'), function () { copyTmdbDiag(); });
-      addParam('kp_sync015_action_run_match', 'button', '', '', lang('run_match'), lang('run_match_descr'), function () { runMatchAudit(); });
-      addParam('kp_sync015_action_show_match', 'button', '', '', lang('show_match'), lang('show_match_descr'), function () { showMatchReport(); });
-      addParam('kp_sync015_action_copy_match', 'button', '', '', lang('copy_match'), lang('copy_match_descr'), function () { copyMatchReport(); });
-      addParam('kp_sync015_action_clear_match', 'button', '', '', lang('clear_match'), lang('clear_match_descr'), function () { clearMatchReport(); });
-      addParam('kp_sync015_sep_cleanup', 'title', '', '', lang('sep_cleanup'), lang('sep_cleanup_descr'));
-      addParam('kp_sync015_action_scan_cleanup', 'button', '', '', lang('scan_bad_lampa'), lang('scan_bad_lampa_descr'), function () { scanOldLampaBookmarks(); });
-      addParam('kp_sync015_action_show_cleanup', 'button', '', '', lang('show_cleanup'), lang('show_cleanup_descr'), function () { showCleanupReport(); });
-      addParam('kp_sync015_action_copy_cleanup', 'button', '', '', lang('copy_cleanup'), lang('copy_cleanup_descr'), function () { copyCleanupReport(); });
-      addParam('kp_sync015_action_apply_cleanup', 'button', '', '', lang('clear_bad_lampa'), lang('clear_bad_lampa_descr'), function () { applyOldLampaCleanup(); });
+      addParam(KEY.tmdbProxyEmail, 'input', storageGet(KEY.tmdbProxyEmail, '') || '', '', lang('tmdb_proxy_email'), lang('tmdb_proxy_email_descr'));
+      addParam('kp_sync017_action_test_tmdb', 'button', '', '', lang('test_tmdb'), lang('test_tmdb_descr'), function () { diagnoseTmdbApi(); });
+      addParam('kp_sync017_action_show_tmdb_diag', 'button', '', '', lang('show_tmdb_diag'), lang('show_tmdb_diag_descr'), function () { showTmdbDiag(); });
+      addParam('kp_sync017_action_copy_tmdb_diag', 'button', '', '', lang('copy_tmdb_diag'), lang('copy_tmdb_diag_descr'), function () { copyTmdbDiag(); });
+      addParam('kp_sync017_action_run_match', 'button', '', '', lang('run_match'), lang('run_match_descr'), function () { runMatchAudit(); });
+      addParam('kp_sync017_action_show_match', 'button', '', '', lang('show_match'), lang('show_match_descr'), function () { showMatchReport(); });
+      addParam('kp_sync017_action_copy_match', 'button', '', '', lang('copy_match'), lang('copy_match_descr'), function () { copyMatchReport(); });
+      addParam('kp_sync017_action_clear_match', 'button', '', '', lang('clear_match'), lang('clear_match_descr'), function () { clearMatchReport(); });
+      addParam('kp_sync017_sep_cleanup', 'title', '', '', lang('sep_cleanup'), lang('sep_cleanup_descr'));
+      addParam('kp_sync017_action_scan_cleanup', 'button', '', '', lang('scan_bad_lampa'), lang('scan_bad_lampa_descr'), function () { scanOldLampaBookmarks(); });
+      addParam('kp_sync017_action_show_cleanup', 'button', '', '', lang('show_cleanup'), lang('show_cleanup_descr'), function () { showCleanupReport(); });
+      addParam('kp_sync017_action_copy_cleanup', 'button', '', '', lang('copy_cleanup'), lang('copy_cleanup_descr'), function () { copyCleanupReport(); });
+      addParam('kp_sync017_action_apply_cleanup', 'button', '', '', lang('clear_bad_lampa'), lang('clear_bad_lampa_descr'), function () { applyOldLampaCleanup(); });
     } catch (e) { log('settings failed', e && e.message); }
   }
 
   function start() {
-    if (window.KinoPubSync015 && window.KinoPubSync015._started) return;
-    window.KinoPubSync015 = {
+    if (window.KinoPubSync017 && window.KinoPubSync017._started) return;
+    window.KinoPubSync017 = {
       _started: true,
       version: VERSION,
       edition: EDITION,
