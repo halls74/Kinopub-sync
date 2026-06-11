@@ -1,15 +1,21 @@
 (function () {
   'use strict';
 
-  var VERSION = '0.1.8';
+  var VERSION = '0.1.9';
   var EDITION = 'alpha-readonly-match';
   var COMPONENT = 'kp_sync_alpha';
-  var LOG = '[KinoPUB Sync 0.1.8]';
+  var LOG = '[KinoPUB Sync 0.1.9]';
   var API_HOST = 'https://api.service-kp.com';
   var CLIENT_ID = 'xbmc';
   var CLIENT_SECRET = 'cgg3gtifu46urtfp2zp1nqtba0k2ezxh';
   var MAX_PAGES_PER_FOLDER = 200;
   var PER_PAGE = 50;
+  var BOOKMARK_PAGE_SIZES = [100, 25];
+  var BOOKMARK_SORT_VARIANTS = [
+    {},
+    { sort: 'id', order: 'asc' },
+    { sort: 'id', order: 'desc' }
+  ];
   var REPORT_SAMPLE_LIMIT = 12;
   var FALLBACK_MIN_RATIO = 0.8;
   var MATCH_TIMEOUT_MS = 5000;
@@ -21,18 +27,18 @@
   var KEY = {
     token: 'kp_token',
     refresh: 'kp_refresh',
-    lastStatus: 'kp_sync018_last_status',
-    report: 'kp_sync018_bookmarks_report',
-    tokenStatus: 'kp_sync018_token_status',
-    cleanupReport: 'kp_sync018_lampa_cleanup_report',
-    matchReport: 'kp_sync018_match_report',
-    matchLimit: 'kp_sync018_match_limit',
-    tmdbProxyEmail: 'kp_sync018_tmdb_proxy_email',
-    tmdbDiag: 'kp_sync018_tmdb_diag',
-    preferredTmdbProvider: 'kp_sync018_preferred_tmdb_provider'
+    lastStatus: 'kp_sync019_last_status',
+    report: 'kp_sync019_bookmarks_report',
+    tokenStatus: 'kp_sync019_token_status',
+    cleanupReport: 'kp_sync019_lampa_cleanup_report',
+    matchReport: 'kp_sync019_match_report',
+    matchLimit: 'kp_sync019_match_limit',
+    tmdbProxyEmail: 'kp_sync019_tmdb_proxy_email',
+    tmdbDiag: 'kp_sync019_tmdb_diag',
+    preferredTmdbProvider: 'kp_sync019_preferred_tmdb_provider'
   };
 
-  if (window.KinoPubSync018 && window.KinoPubSync018.version === VERSION) return;
+  if (window.KinoPubSync019 && window.KinoPubSync019.version === VERSION) return;
 
   function nowIso() {
     try { return new Date().toISOString(); } catch (e) { return String(Date.now()); }
@@ -67,9 +73,9 @@
 
   function lang(key) {
     var ru = {
-      component: 'KinoPUB Sync 0.1.8',
+      component: 'KinoPUB Sync 0.1.9',
       sep: '— Проверка и чтение KinoPUB —',
-      sep_descr: 'Alpha-сборка: чтение KinoPUB и read-only сопоставление с TMDB/Lampa. Ничего не импортирует в Lampa и ничего не меняет в KinoPUB.',
+      sep_descr: 'Alpha-сборка: универсальная диагностика чтения KinoPUB и read-only сопоставление с TMDB/Lampa. Ничего не импортирует в Lampa и ничего не меняет в KinoPUB.',
       cleanup_menu: 'Очистка данных',
       cleanup_menu_descr: 'Открывает внутренний подраздел очистки данных этого плагина: старые закладки, история, продолжение просмотра и служебные карты. KinoPUB не меняется.',
       sep_cleanup: 'Очистка данных',
@@ -79,11 +85,11 @@
       check_token: 'Проверить токен основного KinoPUB',
       check_token_descr: 'Проверяет, есть ли kp_token/kp_refresh от основного lampa_kinopub, и доступен ли API KinoPUB. Отдельную авторизацию не запускает.',
       read_bookmarks: 'Считать папки и закладки KinoPUB',
-      read_bookmarks_descr: 'Читает все доступные папки и элементы закладок авторизованного аккаунта KinoPUB. Ничего не записывает в Lampa.',
+      read_bookmarks_descr: 'Читает все доступные папки и элементы закладок авторизованного аккаунта KinoPUB. v0.1.9 при неполном считывании пробует универсальные fallback-стратегии пагинации. Ничего не записывает в Lampa.',
       show_report: 'Показать краткий отчёт',
-      show_report_descr: 'Открывает краткую сводку последнего чтения папок и закладок, включая повторяющиеся item id.',
+      show_report_descr: 'Открывает краткую сводку последнего чтения папок и закладок: countReported, unique item id, missingUniqueByCount и выбранные стратегии.',
       copy_report: 'Скопировать полный отчёт',
-      copy_report_descr: 'Копирует JSON-отчёт по папкам/закладкам для анализа. Включает повторяющиеся item id внутри папок. Токены в отчёт не включаются.',
+      copy_report_descr: 'Копирует JSON-отчёт по папкам/закладкам для анализа. Включает attempts, compactPageTrace, missingUniqueByCount и повторяющиеся item id. Токены в отчёт не включаются.',
       clear_report: 'Очистить отчёт',
       clear_report_descr: 'Удаляет сохранённый отчёт и статус этой тестовой сборки. Закладки Lampa и токены KinoPUB не трогаются.',
       scan_bad_lampa: 'Найти старые данные Sync в Lampa',
@@ -95,9 +101,9 @@
       clear_bad_lampa: 'Очистить найденные старые данные Sync',
       clear_bad_lampa_descr: 'Удаляет только найденные локальные следы старого Sync: закладки, историю, продолжение просмотра и служебные карты. Перед удалением показывает подтверждение.',
       sep_match: '— Сопоставление KinoPUB → Lampa/TMDB —',
-      sep_match_descr: 'Read-only проверка готовности к импорту: берёт уникальные KinoPUB item id из последнего отчёта закладок, ищет настоящие TMDB/Lampa-карточки по IMDb. v0.1.8 запоминает рабочий TMDB-провайдер, не ждёт заведомо нерабочий Lampa.TMDB.api, делает retry временных ошибок и умеет повторять только проблемные элементы. Ничего не импортирует.',
+      sep_match_descr: 'Read-only проверка готовности к импорту: берёт уникальные KinoPUB item id из последнего отчёта закладок, ищет настоящие TMDB/Lampa-карточки по IMDb. v0.1.9 запоминает рабочий TMDB-провайдер, не ждёт заведомо нерабочий Lampa.TMDB.api, делает retry временных ошибок и умеет повторять только проблемные элементы. Ничего не импортирует.',
       match_limit: 'Лимит сопоставления',
-      match_limit_descr: '0 = проверить все уникальные карточки из последнего отчёта. Для короткой проверки можно указать 10, 25, 50, 100 или 250. Если TMDB недоступен, v0.1.8 остановится после preflight/серии таймаутов.',
+      match_limit_descr: '0 = проверить все уникальные карточки из последнего отчёта. Для короткой проверки можно указать 10, 25, 50, 100 или 250. Если TMDB недоступен, v0.1.9 остановится после preflight/серии таймаутов.',
       tmdb_proxy_email: 'TMDB Proxy email (необязательно)',
       tmdb_proxy_email_descr: 'Необязательный email-параметр для CUB TMDB Proxy. Оставьте пустым, если Lampa работает без него. Плагин больше не подставляет test@mail.ru автоматически.',
       test_tmdb: 'Проверить TMDB/Lampa API',
@@ -296,6 +302,12 @@
     if (isArray(json.folders)) return json.folders;
     if (isArray(json.data)) return json.data;
     if (isArray(json.results)) return json.results;
+    if (json.data && isArray(json.data.items)) return json.data.items;
+    if (json.data && isArray(json.data.bookmarks)) return json.data.bookmarks;
+    if (json.data && isArray(json.data.results)) return json.data.results;
+    if (json.response && isArray(json.response.items)) return json.response.items;
+    if (json.response && isArray(json.response.bookmarks)) return json.response.bookmarks;
+    if (json.response && isArray(json.response.results)) return json.response.results;
     return [];
   }
 
@@ -473,35 +485,127 @@
     return Math.max(0, expected - acceptedRowsFromAttempt(attempt));
   }
 
+  function missingUniqueRowsFromAttempt(attempt, expected) {
+    expected = Number(expected) || 0;
+    if (!expected) return 0;
+    return Math.max(0, expected - ((attempt && attempt.uniqueItems) || 0));
+  }
+
   function shouldRunFallback(best, expected) {
     if (!best || best.error) return true;
     expected = Number(expected) || 0;
     if (!expected) return !(best.rawRowsFetched > 0);
     if (repeatedTailRowsFromAttempt(best) > 0) return true;
-    return acceptedRowsFromAttempt(best) < expected;
+    return ((best.uniqueItems || 0) < expected) || acceptedRowsFromAttempt(best) < expected;
   }
 
   function folderId(folder) { return folder && folder.id != null ? String(folder.id) : ''; }
   function folderTitle(folder) { return String((folder && (folder.title || folder.name)) || 'Без названия'); }
 
-  function strategyList(fid) {
-    return [
-      makeStrategy('path_page_perpage_50', '/bookmarks/' + encodeURIComponent(fid), function (page) { return { page: page, perpage: PER_PAGE }; }, PER_PAGE),
-      makeStrategy('view_folder_page_perpage_50', '/bookmarks/view', function (page) { return { folder: fid, page: page, perpage: PER_PAGE }; }, PER_PAGE)
-    ];
+  function cloneParams(obj) {
+    var out = {};
+    obj = obj || {};
+    for (var k in obj) if (obj.hasOwnProperty(k) && obj[k] !== undefined && obj[k] !== null && obj[k] !== '') out[k] = obj[k];
+    return out;
   }
 
-  function makeStrategy(name, path, paramsBuilder, requestedPerPage) { return { name: name, path: path, paramsBuilder: paramsBuilder, requestedPerPage: requestedPerPage || PER_PAGE }; }
+  function mergeParams(a, b) {
+    var out = cloneParams(a);
+    b = b || {};
+    for (var k in b) if (b.hasOwnProperty(k) && b[k] !== undefined && b[k] !== null && b[k] !== '') out[k] = b[k];
+    return out;
+  }
+
+  function strategyList(fid) {
+    var out = [];
+    var path = '/bookmarks/' + encodeURIComponent(fid);
+    var view = '/bookmarks/view';
+    function add(name, p, builder, size, extended, note) {
+      out.push(makeStrategy(name, p, builder, size, extended, note));
+    }
+    function addPageSet(prefix, p, base, pageKey, sizeKey, size, extended, sortParams) {
+      var label = prefix + '_' + pageKey + '_' + sizeKey + '_' + size;
+      if (sortParams && sortParams.sort) label += '_sort_' + sortParams.sort + '_' + (sortParams.order || '');
+      else if (sortParams && sortParams.order) label += '_order_' + sortParams.order;
+      add(label, p, function (step) {
+        var params = mergeParams(base, sortParams);
+        params[pageKey] = step;
+        params[sizeKey] = size;
+        return params;
+      }, size, extended, 'page-based pagination');
+    }
+    function addOffsetSet(prefix, p, base, offsetKey, sizeKey, size, startAtOne, extended, sortParams) {
+      var label = prefix + '_' + offsetKey + '_' + sizeKey + '_' + size + (startAtOne ? '_one_based' : '_zero_based');
+      if (sortParams && sortParams.sort) label += '_sort_' + sortParams.sort + '_' + (sortParams.order || '');
+      else if (sortParams && sortParams.order) label += '_order_' + sortParams.order;
+      add(label, p, function (step) {
+        var params = mergeParams(base, sortParams);
+        params[offsetKey] = ((step - 1) * size) + (startAtOne ? 1 : 0);
+        params[sizeKey] = size;
+        return params;
+      }, size, extended, 'offset-based pagination');
+    }
+
+    /*
+      These are generic API pagination probes. They intentionally do not assume any
+      account-specific folder title, count, item id, email or provider. The folder's
+      own reported count decides whether extended probes are needed.
+    */
+    addPageSet('path', path, {}, 'page', 'perpage', PER_PAGE, false, {});
+    addPageSet('view_folder', view, { folder: fid }, 'page', 'perpage', PER_PAGE, false, {});
+
+    for (var i = 0; i < BOOKMARK_PAGE_SIZES.length; i++) {
+      var size = BOOKMARK_PAGE_SIZES[i];
+      addPageSet('path', path, {}, 'page', 'perpage', size, true, {});
+      addPageSet('view_folder', view, { folder: fid }, 'page', 'perpage', size, true, {});
+    }
+
+    addPageSet('path', path, {}, 'page', 'limit', PER_PAGE, true, {});
+    addPageSet('view_folder', view, { folder: fid }, 'page', 'limit', PER_PAGE, true, {});
+    addPageSet('path', path, {}, 'page', 'per_page', PER_PAGE, true, {});
+    addPageSet('view_folder', view, { folder: fid }, 'page', 'per_page', PER_PAGE, true, {});
+    addPageSet('path', path, {}, 'page', 'page_size', PER_PAGE, true, {});
+    addPageSet('view_folder', view, { folder: fid }, 'page', 'page_size', PER_PAGE, true, {});
+
+    addOffsetSet('path', path, {}, 'offset', 'limit', PER_PAGE, false, true, {});
+    addOffsetSet('view_folder', view, { folder: fid }, 'offset', 'limit', PER_PAGE, false, true, {});
+    addOffsetSet('path', path, {}, 'offset', 'limit', PER_PAGE, true, true, {});
+    addOffsetSet('view_folder', view, { folder: fid }, 'offset', 'limit', PER_PAGE, true, true, {});
+    addOffsetSet('path', path, {}, 'skip', 'limit', PER_PAGE, false, true, {});
+    addOffsetSet('view_folder', view, { folder: fid }, 'skip', 'limit', PER_PAGE, false, true, {});
+
+    for (var s = 1; s < BOOKMARK_SORT_VARIANTS.length; s++) {
+      var sp = BOOKMARK_SORT_VARIANTS[s];
+      addPageSet('path', path, {}, 'page', 'perpage', PER_PAGE, true, sp);
+      addPageSet('view_folder', view, { folder: fid }, 'page', 'perpage', PER_PAGE, true, sp);
+    }
+    return out;
+  }
+
+  function makeStrategy(name, path, paramsBuilder, requestedPerPage, extended, note) {
+    return { name: name, path: path, paramsBuilder: paramsBuilder, requestedPerPage: requestedPerPage || PER_PAGE, extended: !!extended, note: note || '' };
+  }
+
+  function compactTrace(trace) {
+    trace = trace || [];
+    if (trace.length <= 8) return trace;
+    return trace.slice(0, 4).concat([{ omittedPages: trace.length - 8 }]).concat(trace.slice(trace.length - 4));
+  }
 
   function readFolderAttempt(folder, strategy) {
     var fid = folderId(folder), ftitle = folderTitle(folder), expected = Number(folder && folder.count) || 0;
     var requestedPerPage = Number(strategy.requestedPerPage || PER_PAGE) || PER_PAGE;
-    var attempt = { strategy: strategy.name, expectedRows: expected, requestedPerPage: requestedPerPage, inferredPageSize: 0, pagesRequested: 0, rawRowsFetched: 0, uniqueItems: 0, duplicateRows: 0, stoppedReason: '', error: null, pageTrace: [], rows: [], seen: {}, noNewPages: 0 };
+    var attempt = { strategy: strategy.name, expectedRows: expected, requestedPerPage: requestedPerPage, extended: !!strategy.extended, note: strategy.note || '', inferredPageSize: 0, pagesRequested: 0, rawRowsFetched: 0, uniqueItems: 0, duplicateRows: 0, stoppedReason: '', error: null, pageTrace: [], rows: [], seen: {}, noNewPages: 0, firstAcceptedId: '', lastAcceptedId: '', idRanges: [] };
     var page = 1;
+    function traceRow(pageNo, params, items, newUnique, duplicateRows, firstId, lastId, continueReason) {
+      attempt.pageTrace.push({ strategy: strategy.name, page: pageNo, params: params, requestedPerPage: requestedPerPage, inferredPageSize: attempt.inferredPageSize || 0, itemsReturned: items.length, newUniqueItems: newUnique, duplicateRows: duplicateRows, rawRowsFetchedTotal: attempt.rawRowsFetched, uniqueItemsTotal: attempt.uniqueItems, firstId: firstId, lastId: lastId, continueReason: continueReason });
+      if (firstId || lastId) attempt.idRanges.push({ page: pageNo, firstId: firstId, lastId: lastId, newUniqueItems: newUnique, itemsReturned: items.length });
+    }
     function readNext() {
       if (page > MAX_PAGES_PER_FOLDER) { attempt.stoppedReason = 'max_pages_guard'; return Promise.resolve(attempt); }
       attempt.pagesRequested++;
-      return apiGet(strategy.path, strategy.paramsBuilder(page)).then(function (json) {
+      var params = strategy.paramsBuilder(page) || {};
+      return apiGet(strategy.path, params).then(function (json) {
         var items = asArray(json), newUnique = 0, duplicateRows = 0, firstId = '', lastId = '', continueReason = '';
         if (!attempt.inferredPageSize && items.length) attempt.inferredPageSize = items.length;
         for (var i = 0; i < items.length; i++) {
@@ -512,14 +616,19 @@
           if (!norm.id) norm.id = rawId;
           attempt.rows.push({ norm: norm, raw: items[i] });
           attempt.rawRowsFetched++;
-          if (!attempt.seen[norm.id]) { attempt.seen[norm.id] = true; attempt.uniqueItems++; newUnique++; }
+          if (!attempt.seen[norm.id]) {
+            attempt.seen[norm.id] = true;
+            attempt.uniqueItems++;
+            newUnique++;
+            if (!attempt.firstAcceptedId) attempt.firstAcceptedId = norm.id;
+            attempt.lastAcceptedId = norm.id;
+          }
           else { attempt.duplicateRows++; duplicateRows++; }
         }
 
         if (!items.length) {
           attempt.stoppedReason = page === 1 ? 'empty_folder' : 'empty_page';
-          continueReason = 'stop_empty_page';
-          attempt.pageTrace.push({ strategy: strategy.name, page: page, requestedPerPage: requestedPerPage, inferredPageSize: attempt.inferredPageSize || 0, itemsReturned: items.length, newUniqueItems: newUnique, duplicateRows: duplicateRows, rawRowsFetchedTotal: attempt.rawRowsFetched, firstId: firstId, lastId: lastId, continueReason: continueReason });
+          traceRow(page, params, items, newUnique, duplicateRows, firstId, lastId, 'stop_empty_page');
           return attempt;
         }
 
@@ -527,27 +636,36 @@
         else attempt.noNewPages = 0;
         if (attempt.noNewPages >= 1) {
           attempt.stoppedReason = 'no_new_items_page_maybe_ignored';
-          continueReason = 'stop_no_new_unique_items';
-          attempt.pageTrace.push({ strategy: strategy.name, page: page, requestedPerPage: requestedPerPage, inferredPageSize: attempt.inferredPageSize || items.length, itemsReturned: items.length, newUniqueItems: newUnique, duplicateRows: duplicateRows, rawRowsFetchedTotal: attempt.rawRowsFetched, firstId: firstId, lastId: lastId, continueReason: continueReason });
+          traceRow(page, params, items, newUnique, duplicateRows, firstId, lastId, 'stop_no_new_unique_items');
           return attempt;
         }
 
-        if (expected && attempt.rawRowsFetched >= expected) {
-          attempt.stoppedReason = 'reported_raw_count_reached';
-          continueReason = 'stop_reported_count_reached';
-          attempt.pageTrace.push({ strategy: strategy.name, page: page, requestedPerPage: requestedPerPage, inferredPageSize: attempt.inferredPageSize || items.length, itemsReturned: items.length, newUniqueItems: newUnique, duplicateRows: duplicateRows, rawRowsFetchedTotal: attempt.rawRowsFetched, firstId: firstId, lastId: lastId, continueReason: continueReason });
+        if (expected && attempt.uniqueItems >= expected) {
+          attempt.stoppedReason = 'reported_unique_count_reached';
+          traceRow(page, params, items, newUnique, duplicateRows, firstId, lastId, 'stop_reported_unique_count_reached');
+          return attempt;
+        }
+
+        if (expected && acceptedRowsFromAttempt(attempt) >= expected && attempt.uniqueItems >= expected) {
+          attempt.stoppedReason = 'reported_accepted_count_reached';
+          traceRow(page, params, items, newUnique, duplicateRows, firstId, lastId, 'stop_reported_accepted_count_reached');
           return attempt;
         }
 
         if (!expected && items.length < requestedPerPage) {
           attempt.stoppedReason = 'short_page_no_reported_count';
-          continueReason = 'stop_short_page_without_reported_count';
-          attempt.pageTrace.push({ strategy: strategy.name, page: page, requestedPerPage: requestedPerPage, inferredPageSize: attempt.inferredPageSize || items.length, itemsReturned: items.length, newUniqueItems: newUnique, duplicateRows: duplicateRows, rawRowsFetchedTotal: attempt.rawRowsFetched, firstId: firstId, lastId: lastId, continueReason: continueReason });
+          traceRow(page, params, items, newUnique, duplicateRows, firstId, lastId, 'stop_short_page_without_reported_count');
           return attempt;
         }
 
-        continueReason = expected ? 'continue_until_reported_count_or_empty_page' : 'continue_until_short_or_empty_page';
-        attempt.pageTrace.push({ strategy: strategy.name, page: page, requestedPerPage: requestedPerPage, inferredPageSize: attempt.inferredPageSize || items.length, itemsReturned: items.length, newUniqueItems: newUnique, duplicateRows: duplicateRows, rawRowsFetchedTotal: attempt.rawRowsFetched, firstId: firstId, lastId: lastId, continueReason: continueReason });
+        if (expected && items.length < requestedPerPage && attempt.uniqueItems >= expected) {
+          attempt.stoppedReason = 'short_page_reported_count_satisfied';
+          traceRow(page, params, items, newUnique, duplicateRows, firstId, lastId, 'stop_short_page_reported_count_satisfied');
+          return attempt;
+        }
+
+        continueReason = expected ? 'continue_until_reported_unique_count_or_empty_page' : 'continue_until_short_or_empty_page';
+        traceRow(page, params, items, newUnique, duplicateRows, firstId, lastId, continueReason);
         page++;
         return readNext();
       }).catch(function (err) { attempt.error = errorSummary(err); attempt.stoppedReason = 'error'; return attempt; });
@@ -555,11 +673,17 @@
     return readNext().then(function (a) { delete a.seen; delete a.noNewPages; return a; });
   }
 
+
   function betterAttempt(a, b) {
     if (!a) return b;
     if (!b) return a;
     if (a.error && !b.error) return b;
     if (b.error && !a.error) return a;
+    if ((b.uniqueItems || 0) > (a.uniqueItems || 0)) return b;
+    if ((b.uniqueItems || 0) < (a.uniqueItems || 0)) return a;
+    var au = missingUniqueRowsFromAttempt(a, a.expectedRows), bu = missingUniqueRowsFromAttempt(b, b.expectedRows);
+    if (bu < au) return b;
+    if (bu > au) return a;
     var ar = acceptedRowsFromAttempt(a), br = acceptedRowsFromAttempt(b);
     if (br > ar) return b;
     if (br < ar) return a;
@@ -569,7 +693,6 @@
     var at = repeatedTailRowsFromAttempt(a), bt = repeatedTailRowsFromAttempt(b);
     if (bt < at) return b;
     if (bt > at) return a;
-    if ((b.uniqueItems || 0) > (a.uniqueItems || 0)) return b;
     if ((b.rawRowsFetched || 0) > (a.rawRowsFetched || 0)) return b;
     return a;
   }
@@ -607,15 +730,19 @@
         duplicateRowsTotal: best.duplicateRows,
         missingRawByCount: expected && best.rawRowsFetched < expected ? expected - best.rawRowsFetched : 0,
         missingAcceptedByCount: missingAcceptedRowsFromAttempt(best, expected),
+        missingUniqueByCount: missingUniqueRowsFromAttempt(best, expected),
+        retrievalComplete: !expected || missingUniqueRowsFromAttempt(best, expected) === 0,
         extraRawOverCount: expected && best.rawRowsFetched > expected ? best.rawRowsFetched - expected : 0,
         stoppedReason: best.stoppedReason,
         error: best.error,
         attempts: [],
         pageTrace: best.pageTrace || [],
         duplicateItemsInFolder: duplicateItemsFromAttempt(best),
-        strategiesEquivalent: attemptsHaveSameResult(attempts)
+        strategiesEquivalent: attemptsHaveSameResult(attempts),
+        attemptsRun: attempts.length,
+        extendedAttemptsRun: attempts.filter ? attempts.filter(function (a) { return !!a.extended; }).length : 0
       };
-      for (var ai = 0; ai < attempts.length; ai++) folderReport.attempts.push({ strategy: attempts[ai].strategy, requestedPerPage: attempts[ai].requestedPerPage || PER_PAGE, inferredPageSize: attempts[ai].inferredPageSize || 0, pagesRequested: attempts[ai].pagesRequested, rawRowsFetched: attempts[ai].rawRowsFetched, acceptedRawRows: acceptedRowsFromAttempt(attempts[ai]), repeatedTailRows: repeatedTailRowsFromAttempt(attempts[ai]), uniqueItems: attempts[ai].uniqueItems, duplicateRows: acceptedDuplicateRowsFromAttempt(attempts[ai]), duplicateRowsTotal: attempts[ai].duplicateRows, missingAcceptedByCount: missingAcceptedRowsFromAttempt(attempts[ai], expected), stoppedReason: attempts[ai].stoppedReason, error: attempts[ai].error });
+      for (var ai = 0; ai < attempts.length; ai++) folderReport.attempts.push({ strategy: attempts[ai].strategy, extended: !!attempts[ai].extended, note: attempts[ai].note || '', requestedPerPage: attempts[ai].requestedPerPage || PER_PAGE, inferredPageSize: attempts[ai].inferredPageSize || 0, pagesRequested: attempts[ai].pagesRequested, rawRowsFetched: attempts[ai].rawRowsFetched, acceptedRawRows: acceptedRowsFromAttempt(attempts[ai]), repeatedTailRows: repeatedTailRowsFromAttempt(attempts[ai]), uniqueItems: attempts[ai].uniqueItems, missingUniqueByCount: missingUniqueRowsFromAttempt(attempts[ai], expected), duplicateRows: acceptedDuplicateRowsFromAttempt(attempts[ai]), duplicateRowsTotal: attempts[ai].duplicateRows, missingAcceptedByCount: missingAcceptedRowsFromAttempt(attempts[ai], expected), firstAcceptedId: attempts[ai].firstAcceptedId || '', lastAcceptedId: attempts[ai].lastAcceptedId || '', compactPageTrace: compactTrace(attempts[ai].pageTrace || []), stoppedReason: attempts[ai].stoppedReason, error: attempts[ai].error });
 
       var seenInFolder = {};
       var acceptedEntries = acceptedRowEntries(best);
@@ -634,7 +761,8 @@
       else if (attempts.length > 1) report.warnings.push('Папка “' + ftitle + '”: основная стратегия была неполной, поэтому запускались fallback-стратегии. Выбрана: ' + folderReport.selectedStrategy + '.');
       if (folderReport.repeatedTailRows) report.warnings.push('Папка “' + ftitle + '”: API повторил последнюю страницу. Полезных строк до повтора: ' + folderReport.acceptedRawRows + ' из счётчика ' + expected + '; повторно пришло строк: ' + folderReport.repeatedTailRows + '. Эти повторы не считаются дублями закладок.');
       if (folderReport.missingRawByCount && !folderReport.repeatedTailRows) report.warnings.push('Папка “' + ftitle + '”: заявлено ' + expected + ', сырых строк получено ' + best.rawRowsFetched + ', не хватает ' + folderReport.missingRawByCount + '.');
-      if (folderReport.missingAcceptedByCount) report.warnings.push('Папка “' + ftitle + '”: API не отдал ' + folderReport.missingAcceptedByCount + ' строк до счётчика папки. Это не дубли в папке, а расхождение между счётчиком KinoPUB и пагинацией API.');
+      if (folderReport.missingUniqueByCount) report.warnings.push('Папка “' + ftitle + '”: даже после расширенных универсальных стратегий API не отдал ' + folderReport.missingUniqueByCount + ' уникальных item id до счётчика папки. Эти элементы нельзя считать дублями; до импорта нужно либо найти рабочую стратегию API, либо оставить их как не полученные из API.');
+      else if (folderReport.countReported) report.warnings.push('Папка “' + ftitle + '”: счётчик папки закрыт по уникальным item id (' + folderReport.uniqueItems + '/' + folderReport.countReported + ').');
       if (folderReport.duplicateRows) report.warnings.push('Папка “' + ftitle + '”: внутри принятых страниц найдено повторяющихся item id: ' + folderReport.duplicateRows + '. Список см. в duplicateItemsInFolder. Повтор хвоста страницы сюда не входит.');
       return folderReport;
     });
@@ -673,6 +801,9 @@
     lines.push('Уникальных KinoPUB item id глобально: ' + report.totals.uniqueGlobalItems);
     lines.push('Папок с ошибками: ' + report.totals.folderErrors);
     lines.push('Папок с недочётом raw-count: ' + report.totals.foldersWithMissingRawCount);
+    lines.push('Папок с недочётом уникальных item id: ' + (report.totals.foldersWithMissingUniqueCount || 0));
+    lines.push('Недостающих уникальных item id по счётчикам: ' + (report.totals.missingUniqueByCount || 0));
+    lines.push('Стратегий чтения выполнено: ' + (report.totals.strategyAttempts || 0) + ', расширенных: ' + (report.totals.extendedStrategyAttempts || 0));
     lines.push('Повторяющихся item id внутри принятых страниц: ' + report.totals.duplicateRowsInFolders);
     lines.push('');
     lines.push('Типы контента: ' + JSON.stringify(report.stats.typeStats));
@@ -702,7 +833,8 @@
       if (dupLines.length > 20) lines.push('- ... ещё ' + (dupLines.length - 20));
       lines.push('');
     }
-    lines.push('Важно: v0.1.8 ничего не импортирует в Lampa и ничего не меняет в KinoPUB. Очистка данных Lampa находится в основных настройках плагина и выполняется только после сканирования и подтверждения.');
+    lines.push('Политика обобщения: в плагине нет зашитых пользовательских счётчиков, названий папок или item id; все выводы строятся только из текущего ответа API конкретного аккаунта.');
+    lines.push('Важно: v0.1.9 ничего не импортирует в Lampa и ничего не меняет в KinoPUB. Очистка данных Lampa находится в основных настройках плагина и выполняется только после сканирования и подтверждения.');
     return lines.join('\n');
   }
 
@@ -717,12 +849,12 @@
       source: 'KinoPUB API bookmarks read-only audit',
       warnings: [],
       token: { accessTokenPresent: !!tokenAccess(), refreshTokenPresent: !!tokenRefresh(), tokensIncluded: false },
-      api: { host: API_HOST, endpoints: ['/v1/bookmarks', '/v1/bookmarks/<folder_id>', '/v1/bookmarks/view?folder=<folder_id> fallback if accepted rows are incomplete', 'fallback limit=50 removed from normal mode because it is slower and returned the same API tail', 'pagination: page + perpage=50'] },
+      api: { host: API_HOST, endpoints: ['/v1/bookmarks', '/v1/bookmarks/<folder_id>', '/v1/bookmarks/view?folder=<folder_id>'], retrievalAudit: 'Generic multi-strategy pagination probe: page/perpage, page/limit, page/per_page, page/page_size, offset/limit, skip/limit, optional sort/order variants. No account-specific counts, folder names or item ids are hardcoded.' },
       folders: [],
       catalog: [],
       rawSamples: [],
       stats: { typeStats: {}, subtypeStats: {}, normalizedKindStats: {}, unknownRawTypes: {}, withImdb: 0, withoutImdb: 0, withKinopoisk: 0, withoutKinopoisk: 0, withTmdb: 0, withoutTmdb: 0, missingImdbSamples: [], missingKinopoiskSamples: [] },
-      totals: { folders: 0, reportedRows: 0, rawRowsFetched: 0, acceptedRawRows: 0, repeatedTailRows: 0, uniqueRowsInFolders: 0, uniqueGlobalItems: 0, folderErrors: 0, foldersWithMissingRawCount: 0, foldersWithMissingAcceptedCount: 0, duplicateRowsInFolders: 0 },
+      totals: { folders: 0, reportedRows: 0, rawRowsFetched: 0, acceptedRawRows: 0, repeatedTailRows: 0, uniqueRowsInFolders: 0, uniqueGlobalItems: 0, folderErrors: 0, foldersWithMissingRawCount: 0, foldersWithMissingAcceptedCount: 0, foldersWithMissingUniqueCount: 0, missingUniqueByCount: 0, strategyAttempts: 0, extendedStrategyAttempts: 0, duplicateRowsInFolders: 0 },
       _globalItems: {}
     };
     return apiGet('/bookmarks', {}).then(function (json) {
@@ -745,13 +877,16 @@
         if (report.folders[i].error) report.totals.folderErrors++;
         if (report.folders[i].missingRawByCount) report.totals.foldersWithMissingRawCount++;
         if (report.folders[i].missingAcceptedByCount) report.totals.foldersWithMissingAcceptedCount++;
+        if (report.folders[i].missingUniqueByCount) { report.totals.foldersWithMissingUniqueCount++; report.totals.missingUniqueByCount += report.folders[i].missingUniqueByCount || 0; }
+        report.totals.strategyAttempts += report.folders[i].attemptsRun || (report.folders[i].attempts || []).length || 0;
+        report.totals.extendedStrategyAttempts += report.folders[i].extendedAttemptsRun || 0;
       }
       report.uniqueItems = report._globalItems;
       delete report._globalItems;
       if (!report.warnings.length) report.warnings.push('Критичных предупреждений нет. Проверьте totals и pageTrace для больших папок.');
       report.summaryText = buildReportSummary(report);
       storageSet(KEY.report, report);
-      setStatus(lang('done') + ': папок ' + report.totals.folders + ', accepted ' + report.totals.acceptedRawRows + '/' + report.totals.reportedRows + ', уникальных ' + report.totals.uniqueGlobalItems + ', ошибок ' + report.totals.folderErrors);
+      setStatus(lang('done') + ': папок ' + report.totals.folders + ', unique-in-folders ' + report.totals.uniqueRowsInFolders + '/' + report.totals.reportedRows + ', глобально ' + report.totals.uniqueGlobalItems + ', missing ' + (report.totals.missingUniqueByCount || 0) + ', ошибок ' + report.totals.folderErrors);
       noty(lang('done'));
       return report;
     }).catch(function (err) {
@@ -763,10 +898,10 @@
     });
   }
 
-  function getReport() { return storageGetAny([KEY.report, 'kp_sync017_bookmarks_report', 'kp_sync016_bookmarks_report'], null); }
+  function getReport() { return storageGetAny([KEY.report, 'kp_sync018_bookmarks_report', 'kp_sync017_bookmarks_report', 'kp_sync016_bookmarks_report'], null); }
   function reportText() { var r = getReport(); return r ? JSON.stringify(r, null, 2) : lang('report_missing'); }
-  function showReport() { var r = getReport(); if (!r) { noty(lang('report_missing')); return; } showText('KinoPUB Sync 0.1.8', r.summaryText || reportText()); }
-  function copyReport() { var text = reportText(); return copyText(text).then(function () { noty(lang('copied')); }).catch(function () { noty(lang('copy_failed')); showText('KinoPUB Sync 0.1.8 — отчёт', text); }); }
+  function showReport() { var r = getReport(); if (!r) { noty(lang('report_missing')); return; } showText('KinoPUB Sync 0.1.9', r.summaryText || reportText()); }
+  function copyReport() { var text = reportText(); return copyText(text).then(function () { noty(lang('copied')); }).catch(function () { noty(lang('copy_failed')); showText('KinoPUB Sync 0.1.9 — отчёт', text); }); }
   function clearReport() { storageRemove(KEY.report); storageRemove(KEY.tokenStatus); storageSet(KEY.lastStatus, ''); noty(lang('report_cleared')); }
 
   function padImdb(id) {
@@ -1188,7 +1323,7 @@
     });
   }
 
-  function getTmdbDiag() { return storageGetAny([KEY.tmdbDiag, 'kp_sync017_tmdb_diag', 'kp_sync016_tmdb_diag'], null); }
+  function getTmdbDiag() { return storageGetAny([KEY.tmdbDiag, 'kp_sync018_tmdb_diag', 'kp_sync017_tmdb_diag', 'kp_sync016_tmdb_diag'], null); }
 
   function buildTmdbDiagText(diag) {
     if (!diag) return lang('tmdb_diag_missing');
@@ -1504,7 +1639,7 @@
         retryCount: MATCH_RETRY_COUNT,
         retryDelaysMs: MATCH_RETRY_DELAYS.slice(0),
         preferredProvider: preferredTmdbProvider() || '',
-        note: opts.note || 'Only resolved TMDB/Lampa cards found by IMDb are import candidates. Kinopoisk ID is diagnostic unless a reliable Kinopoisk->TMDB/Lampa resolver is implemented. No import. v0.1.8 uses fast TMDB provider preference, retries transient API errors, and can repeat only blocked_api_error items.'
+        note: opts.note || 'Only resolved TMDB/Lampa cards found by IMDb are import candidates. Kinopoisk ID is diagnostic unless a reliable Kinopoisk->TMDB/Lampa resolver is implemented. No import. v0.1.9 uses fast TMDB provider preference, retries transient API errors, and can repeat only blocked_api_error items.'
       },
       tmdbPreflight: null,
       aborted: false,
@@ -1635,10 +1770,10 @@
     });
   }
 
-  function getMatchReport() { return storageGetAny([KEY.matchReport, 'kp_sync017_match_report'], null); }
+  function getMatchReport() { return storageGetAny([KEY.matchReport, 'kp_sync018_match_report', 'kp_sync017_match_report'], null); }
   function matchReportText() { var r = getMatchReport(); return r ? JSON.stringify(r, null, 2) : lang('match_missing'); }
-  function showMatchReport() { var r = getMatchReport(); if (!r) { noty(lang('match_missing')); return; } showText('KinoPUB Sync 0.1.8 — готовность импорта', r.summaryText || matchReportText()); }
-  function copyMatchReport() { var text = matchReportText(); return copyText(text).then(function () { noty(lang('copied')); }).catch(function () { noty(lang('copy_failed')); showText('KinoPUB Sync 0.1.8 — отчёт готовности импорта', text); }); }
+  function showMatchReport() { var r = getMatchReport(); if (!r) { noty(lang('match_missing')); return; } showText('KinoPUB Sync 0.1.9 — готовность импорта', r.summaryText || matchReportText()); }
+  function copyMatchReport() { var text = matchReportText(); return copyText(text).then(function () { noty(lang('copied')); }).catch(function () { noty(lang('copy_failed')); showText('KinoPUB Sync 0.1.9 — отчёт готовности импорта', text); }); }
   function clearMatchReport() { storageRemove(KEY.matchReport); storageRemove('kp_sync017_match_report'); noty(lang('match_report_cleared')); }
 
   function favoriteStorage() { var fav = storageGet('favorite', {}) || {}; if (typeof fav === 'string') fav = parseJson(fav) || {}; return fav && typeof fav === 'object' ? fav : {}; }
@@ -1804,8 +1939,8 @@
   function countIdsInArray(arr, ids) { var n = 0; for (var i = 0; arr && i < arr.length; i++) if (ids[String(arr[i])]) n++; return n; }
   function cleanupReport() { return storageGet(KEY.cleanupReport, null); }
   function cleanupReportText() { var r = cleanupReport(); return r ? JSON.stringify(r, null, 2) : lang('cleanup_missing'); }
-  function showCleanupReport() { var r = cleanupReport(); if (!r) { noty(lang('cleanup_missing')); return; } showText('KinoPUB Sync 0.1.8 — очистка Lampa', JSON.stringify(r, null, 2)); }
-  function copyCleanupReport() { var text = cleanupReportText(); return copyText(text).then(function () { noty(lang('copied')); }).catch(function () { noty(lang('copy_failed')); showText('KinoPUB Sync 0.1.8 — очистка Lampa', text); }); }
+  function showCleanupReport() { var r = cleanupReport(); if (!r) { noty(lang('cleanup_missing')); return; } showText('KinoPUB Sync 0.1.9 — очистка Lampa', JSON.stringify(r, null, 2)); }
+  function copyCleanupReport() { var text = cleanupReportText(); return copyText(text).then(function () { noty(lang('copied')); }).catch(function () { noty(lang('copy_failed')); showText('KinoPUB Sync 0.1.9 — очистка Lampa', text); }); }
 
   function applyOldLampaCleanup() {
     var report = cleanupReport();
@@ -1859,7 +1994,7 @@
 
 
   function showCleanupMenu() {
-    var apiName = 'KinoPubSync018';
+    var apiName = 'KinoPubSync019';
     var btnStyle = 'display:block;width:100%;margin:.45em 0;padding:.65em .75em;border-radius:.45em;border:0;background:#3f51b5;color:#fff;text-align:left;font-size:1em;';
     var smallStyle = 'font-size:.85em;opacity:.75;margin:.25em 0 .75em 0;line-height:1.35';
     function action(fn) {
@@ -1903,35 +2038,35 @@
       if (!window.Lampa || !Lampa.SettingsApi || !Lampa.SettingsApi.addComponent) return;
       var icon = '<svg width="24" height="24" viewBox="0 0 24 24"><path fill="currentColor" d="M12 3a9 9 0 0 0-9 9h2a7 7 0 0 1 11.95-4.95L15 9h6V3l-2.62 2.62A8.97 8.97 0 0 0 12 3Zm7 9a7 7 0 0 1-11.95 4.95L9 15H3v6l2.62-2.62A9 9 0 0 0 21 12h-2Z"/></svg>';
       Lampa.SettingsApi.addComponent({ component: COMPONENT, name: lang('component'), icon: icon });
-      addParam('kp_sync018_sep_main', 'title', '', '', lang('sep'), lang('sep_descr'));
+      addParam('kp_sync019_sep_main', 'title', '', '', lang('sep'), lang('sep_descr'));
       addParam(KEY.lastStatus, 'input', storageGet(KEY.lastStatus, '') || '', '', lang('status'), lang('status_descr'));
-      addParam('kp_sync018_action_check_token', 'button', '', '', lang('check_token'), lang('check_token_descr'), function () { checkToken(); });
-      addParam('kp_sync018_action_read_bookmarks', 'button', '', '', lang('read_bookmarks'), lang('read_bookmarks_descr'), function () { readBookmarks(); });
-      addParam('kp_sync018_action_show_report', 'button', '', '', lang('show_report'), lang('show_report_descr'), function () { showReport(); });
-      addParam('kp_sync018_action_copy_report', 'button', '', '', lang('copy_report'), lang('copy_report_descr'), function () { copyReport(); });
-      addParam('kp_sync018_action_clear_report', 'button', '', '', lang('clear_report'), lang('clear_report_descr'), function () { clearReport(); });
-      addParam('kp_sync018_sep_match', 'title', '', '', lang('sep_match'), lang('sep_match_descr'));
+      addParam('kp_sync019_action_check_token', 'button', '', '', lang('check_token'), lang('check_token_descr'), function () { checkToken(); });
+      addParam('kp_sync019_action_read_bookmarks', 'button', '', '', lang('read_bookmarks'), lang('read_bookmarks_descr'), function () { readBookmarks(); });
+      addParam('kp_sync019_action_show_report', 'button', '', '', lang('show_report'), lang('show_report_descr'), function () { showReport(); });
+      addParam('kp_sync019_action_copy_report', 'button', '', '', lang('copy_report'), lang('copy_report_descr'), function () { copyReport(); });
+      addParam('kp_sync019_action_clear_report', 'button', '', '', lang('clear_report'), lang('clear_report_descr'), function () { clearReport(); });
+      addParam('kp_sync019_sep_match', 'title', '', '', lang('sep_match'), lang('sep_match_descr'));
       addParam(KEY.matchLimit, 'input', storageGet(KEY.matchLimit, '0') || '0', '', lang('match_limit'), lang('match_limit_descr'));
       addParam(KEY.tmdbProxyEmail, 'input', storageGet(KEY.tmdbProxyEmail, '') || '', '', lang('tmdb_proxy_email'), lang('tmdb_proxy_email_descr'));
-      addParam('kp_sync018_action_test_tmdb', 'button', '', '', lang('test_tmdb'), lang('test_tmdb_descr'), function () { diagnoseTmdbApi(); });
-      addParam('kp_sync018_action_show_tmdb_diag', 'button', '', '', lang('show_tmdb_diag'), lang('show_tmdb_diag_descr'), function () { showTmdbDiag(); });
-      addParam('kp_sync018_action_copy_tmdb_diag', 'button', '', '', lang('copy_tmdb_diag'), lang('copy_tmdb_diag_descr'), function () { copyTmdbDiag(); });
-      addParam('kp_sync018_action_run_match', 'button', '', '', lang('run_match'), lang('run_match_descr'), function () { runMatchAudit(); });
-      addParam('kp_sync018_action_retry_api_errors', 'button', '', '', lang('retry_api_errors'), lang('retry_api_errors_descr'), function () { runRetryApiErrors(); });
-      addParam('kp_sync018_action_show_match', 'button', '', '', lang('show_match'), lang('show_match_descr'), function () { showMatchReport(); });
-      addParam('kp_sync018_action_copy_match', 'button', '', '', lang('copy_match'), lang('copy_match_descr'), function () { copyMatchReport(); });
-      addParam('kp_sync018_action_clear_match', 'button', '', '', lang('clear_match'), lang('clear_match_descr'), function () { clearMatchReport(); });
-      addParam('kp_sync018_sep_cleanup', 'title', '', '', lang('sep_cleanup'), lang('sep_cleanup_descr'));
-      addParam('kp_sync018_action_scan_cleanup', 'button', '', '', lang('scan_bad_lampa'), lang('scan_bad_lampa_descr'), function () { scanOldLampaBookmarks(); });
-      addParam('kp_sync018_action_show_cleanup', 'button', '', '', lang('show_cleanup'), lang('show_cleanup_descr'), function () { showCleanupReport(); });
-      addParam('kp_sync018_action_copy_cleanup', 'button', '', '', lang('copy_cleanup'), lang('copy_cleanup_descr'), function () { copyCleanupReport(); });
-      addParam('kp_sync018_action_apply_cleanup', 'button', '', '', lang('clear_bad_lampa'), lang('clear_bad_lampa_descr'), function () { applyOldLampaCleanup(); });
+      addParam('kp_sync019_action_test_tmdb', 'button', '', '', lang('test_tmdb'), lang('test_tmdb_descr'), function () { diagnoseTmdbApi(); });
+      addParam('kp_sync019_action_show_tmdb_diag', 'button', '', '', lang('show_tmdb_diag'), lang('show_tmdb_diag_descr'), function () { showTmdbDiag(); });
+      addParam('kp_sync019_action_copy_tmdb_diag', 'button', '', '', lang('copy_tmdb_diag'), lang('copy_tmdb_diag_descr'), function () { copyTmdbDiag(); });
+      addParam('kp_sync019_action_run_match', 'button', '', '', lang('run_match'), lang('run_match_descr'), function () { runMatchAudit(); });
+      addParam('kp_sync019_action_retry_api_errors', 'button', '', '', lang('retry_api_errors'), lang('retry_api_errors_descr'), function () { runRetryApiErrors(); });
+      addParam('kp_sync019_action_show_match', 'button', '', '', lang('show_match'), lang('show_match_descr'), function () { showMatchReport(); });
+      addParam('kp_sync019_action_copy_match', 'button', '', '', lang('copy_match'), lang('copy_match_descr'), function () { copyMatchReport(); });
+      addParam('kp_sync019_action_clear_match', 'button', '', '', lang('clear_match'), lang('clear_match_descr'), function () { clearMatchReport(); });
+      addParam('kp_sync019_sep_cleanup', 'title', '', '', lang('sep_cleanup'), lang('sep_cleanup_descr'));
+      addParam('kp_sync019_action_scan_cleanup', 'button', '', '', lang('scan_bad_lampa'), lang('scan_bad_lampa_descr'), function () { scanOldLampaBookmarks(); });
+      addParam('kp_sync019_action_show_cleanup', 'button', '', '', lang('show_cleanup'), lang('show_cleanup_descr'), function () { showCleanupReport(); });
+      addParam('kp_sync019_action_copy_cleanup', 'button', '', '', lang('copy_cleanup'), lang('copy_cleanup_descr'), function () { copyCleanupReport(); });
+      addParam('kp_sync019_action_apply_cleanup', 'button', '', '', lang('clear_bad_lampa'), lang('clear_bad_lampa_descr'), function () { applyOldLampaCleanup(); });
     } catch (e) { log('settings failed', e && e.message); }
   }
 
   function start() {
-    if (window.KinoPubSync018 && window.KinoPubSync018._started) return;
-    window.KinoPubSync018 = {
+    if (window.KinoPubSync019 && window.KinoPubSync019._started) return;
+    window.KinoPubSync019 = {
       _started: true,
       version: VERSION,
       edition: EDITION,
