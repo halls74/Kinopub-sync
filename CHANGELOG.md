@@ -1,10 +1,11 @@
 # Changelog
 
-## 0.1.9-alpha
+## 0.1.10-alpha
 
+- Основная стратегия чтения изменена на `page + perpage=48`; HAR веб-портала KinoPUB показал, что `/favorites/view?id=<folder>&page=<n>` выводит 48 карточек на страницу.
 - Добавлен универсальный multi-strategy audit чтения закладок KinoPUB.
 - Для каждой папки сравнивается `countReported` с количеством реально полученных уникальных `item_id`.
-- При неполном чтении запускаются fallback-стратегии пагинации: `page/perpage`, `page/limit`, `page/per_page`, `page/page_size`, `offset/limit`, `skip/limit`, а также базовые `sort=id&order=asc/desc` варианты.
+- При неполном чтении запускаются fallback-стратегии пагинации: `page/perpage=48`, fallback `page/perpage=50/100/25`, `page/limit`, `page/per_page`, `page/page_size`, `offset/limit`, `skip/limit`, а также базовые `sort=id&order=asc/desc` варианты.
 - Выбор лучшей стратегии теперь приоритетно основан на максимальном числе уникальных `item_id`.
 - В отчёт добавлены `missingUniqueByCount`, `retrievalComplete`, `attemptsRun`, `extendedAttemptsRun`, `compactPageTrace`, `firstAcceptedId` и `lastAcceptedId`.
 - В плагин не зашиваются пользовательские счётчики, названия папок, item id, email или данные конкретного аккаунта; все выводы строятся из текущего ответа API.

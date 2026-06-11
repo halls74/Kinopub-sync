@@ -1,16 +1,16 @@
 (function () {
   'use strict';
 
-  var VERSION = '0.1.9';
+  var VERSION = '0.1.10';
   var EDITION = 'alpha-readonly-match';
   var COMPONENT = 'kp_sync_alpha';
-  var LOG = '[KinoPUB Sync 0.1.9]';
+  var LOG = '[KinoPUB Sync 0.1.10]';
   var API_HOST = 'https://api.service-kp.com';
   var CLIENT_ID = 'xbmc';
   var CLIENT_SECRET = 'cgg3gtifu46urtfp2zp1nqtba0k2ezxh';
   var MAX_PAGES_PER_FOLDER = 200;
-  var PER_PAGE = 50;
-  var BOOKMARK_PAGE_SIZES = [100, 25];
+  var PER_PAGE = 48;
+  var BOOKMARK_PAGE_SIZES = [50, 100, 25];
   var BOOKMARK_SORT_VARIANTS = [
     {},
     { sort: 'id', order: 'asc' },
@@ -27,18 +27,18 @@
   var KEY = {
     token: 'kp_token',
     refresh: 'kp_refresh',
-    lastStatus: 'kp_sync019_last_status',
-    report: 'kp_sync019_bookmarks_report',
-    tokenStatus: 'kp_sync019_token_status',
-    cleanupReport: 'kp_sync019_lampa_cleanup_report',
-    matchReport: 'kp_sync019_match_report',
-    matchLimit: 'kp_sync019_match_limit',
-    tmdbProxyEmail: 'kp_sync019_tmdb_proxy_email',
-    tmdbDiag: 'kp_sync019_tmdb_diag',
-    preferredTmdbProvider: 'kp_sync019_preferred_tmdb_provider'
+    lastStatus: 'kp_sync0110_last_status',
+    report: 'kp_sync0110_bookmarks_report',
+    tokenStatus: 'kp_sync0110_token_status',
+    cleanupReport: 'kp_sync0110_lampa_cleanup_report',
+    matchReport: 'kp_sync0110_match_report',
+    matchLimit: 'kp_sync0110_match_limit',
+    tmdbProxyEmail: 'kp_sync0110_tmdb_proxy_email',
+    tmdbDiag: 'kp_sync0110_tmdb_diag',
+    preferredTmdbProvider: 'kp_sync0110_preferred_tmdb_provider'
   };
 
-  if (window.KinoPubSync019 && window.KinoPubSync019.version === VERSION) return;
+  if (window.KinoPubSync0110 && window.KinoPubSync0110.version === VERSION) return;
 
   function nowIso() {
     try { return new Date().toISOString(); } catch (e) { return String(Date.now()); }
@@ -73,9 +73,9 @@
 
   function lang(key) {
     var ru = {
-      component: 'KinoPUB Sync 0.1.9',
+      component: 'KinoPUB Sync 0.1.10',
       sep: '— Проверка и чтение KinoPUB —',
-      sep_descr: 'Alpha-сборка: универсальная диагностика чтения KinoPUB и read-only сопоставление с TMDB/Lampa. Ничего не импортирует в Lampa и ничего не меняет в KinoPUB.',
+      sep_descr: 'Alpha-сборка: универсальная диагностика чтения KinoPUB и read-only сопоставление с TMDB/Lampa. v0.1.10 использует page+perpage=48 как основной размер страницы, потому что веб-портал KinoPUB показывает 48 карточек на HTML-страницу. Ничего не импортирует в Lampa и ничего не меняет в KinoPUB.',
       cleanup_menu: 'Очистка данных',
       cleanup_menu_descr: 'Открывает внутренний подраздел очистки данных этого плагина: старые закладки, история, продолжение просмотра и служебные карты. KinoPUB не меняется.',
       sep_cleanup: 'Очистка данных',
@@ -85,7 +85,7 @@
       check_token: 'Проверить токен основного KinoPUB',
       check_token_descr: 'Проверяет, есть ли kp_token/kp_refresh от основного lampa_kinopub, и доступен ли API KinoPUB. Отдельную авторизацию не запускает.',
       read_bookmarks: 'Считать папки и закладки KinoPUB',
-      read_bookmarks_descr: 'Читает все доступные папки и элементы закладок авторизованного аккаунта KinoPUB. v0.1.9 при неполном считывании пробует универсальные fallback-стратегии пагинации. Ничего не записывает в Lampa.',
+      read_bookmarks_descr: 'Читает все доступные папки и элементы закладок авторизованного аккаунта KinoPUB. v0.1.10 сначала пробует page+perpage=48, затем универсальные fallback-стратегии. Ничего не записывает в Lampa.',
       show_report: 'Показать краткий отчёт',
       show_report_descr: 'Открывает краткую сводку последнего чтения папок и закладок: countReported, unique item id, missingUniqueByCount и выбранные стратегии.',
       copy_report: 'Скопировать полный отчёт',
@@ -101,9 +101,9 @@
       clear_bad_lampa: 'Очистить найденные старые данные Sync',
       clear_bad_lampa_descr: 'Удаляет только найденные локальные следы старого Sync: закладки, историю, продолжение просмотра и служебные карты. Перед удалением показывает подтверждение.',
       sep_match: '— Сопоставление KinoPUB → Lampa/TMDB —',
-      sep_match_descr: 'Read-only проверка готовности к импорту: берёт уникальные KinoPUB item id из последнего отчёта закладок, ищет настоящие TMDB/Lampa-карточки по IMDb. v0.1.9 запоминает рабочий TMDB-провайдер, не ждёт заведомо нерабочий Lampa.TMDB.api, делает retry временных ошибок и умеет повторять только проблемные элементы. Ничего не импортирует.',
+      sep_match_descr: 'Read-only проверка готовности к импорту: берёт уникальные KinoPUB item id из последнего отчёта закладок, ищет настоящие TMDB/Lampa-карточки по IMDb. v0.1.10 запоминает рабочий TMDB-провайдер, не ждёт заведомо нерабочий Lampa.TMDB.api, делает retry временных ошибок и умеет повторять только проблемные элементы. Ничего не импортирует.',
       match_limit: 'Лимит сопоставления',
-      match_limit_descr: '0 = проверить все уникальные карточки из последнего отчёта. Для короткой проверки можно указать 10, 25, 50, 100 или 250. Если TMDB недоступен, v0.1.9 остановится после preflight/серии таймаутов.',
+      match_limit_descr: '0 = проверить все уникальные карточки из последнего отчёта. Для короткой проверки можно указать 10, 25, 50, 100 или 250. Если TMDB недоступен, v0.1.10 остановится после preflight/серии таймаутов.',
       tmdb_proxy_email: 'TMDB Proxy email (необязательно)',
       tmdb_proxy_email_descr: 'Необязательный email-параметр для CUB TMDB Proxy. Оставьте пустым, если Lampa работает без него. Плагин больше не подставляет test@mail.ru автоматически.',
       test_tmdb: 'Проверить TMDB/Lampa API',
@@ -834,7 +834,7 @@
       lines.push('');
     }
     lines.push('Политика обобщения: в плагине нет зашитых пользовательских счётчиков, названий папок или item id; все выводы строятся только из текущего ответа API конкретного аккаунта.');
-    lines.push('Важно: v0.1.9 ничего не импортирует в Lampa и ничего не меняет в KinoPUB. Очистка данных Lampa находится в основных настройках плагина и выполняется только после сканирования и подтверждения.');
+    lines.push('Важно: v0.1.10 ничего не импортирует в Lampa и ничего не меняет в KinoPUB. Очистка данных Lampa находится в основных настройках плагина и выполняется только после сканирования и подтверждения.');
     return lines.join('\n');
   }
 
@@ -849,7 +849,7 @@
       source: 'KinoPUB API bookmarks read-only audit',
       warnings: [],
       token: { accessTokenPresent: !!tokenAccess(), refreshTokenPresent: !!tokenRefresh(), tokensIncluded: false },
-      api: { host: API_HOST, endpoints: ['/v1/bookmarks', '/v1/bookmarks/<folder_id>', '/v1/bookmarks/view?folder=<folder_id>'], retrievalAudit: 'Generic multi-strategy pagination probe: page/perpage, page/limit, page/per_page, page/page_size, offset/limit, skip/limit, optional sort/order variants. No account-specific counts, folder names or item ids are hardcoded.' },
+      api: { host: API_HOST, endpoints: ['/v1/bookmarks', '/v1/bookmarks/<folder_id>', '/v1/bookmarks/view?folder=<folder_id>'], retrievalAudit: 'Generic multi-strategy pagination probe. v0.1.10 starts with page/perpage=48 because KinoPUB web portal pages contain 48 cards; this is site-behavior-based, not account-specific. Fallbacks include page/perpage=50/100/25, page/limit, page/per_page, page/page_size, offset/limit, skip/limit, optional sort/order variants. No account-specific counts, folder names or item ids are hardcoded.' },
       folders: [],
       catalog: [],
       rawSamples: [],
@@ -898,10 +898,10 @@
     });
   }
 
-  function getReport() { return storageGetAny([KEY.report, 'kp_sync018_bookmarks_report', 'kp_sync017_bookmarks_report', 'kp_sync016_bookmarks_report'], null); }
+  function getReport() { return storageGetAny([KEY.report, 'kp_sync019_bookmarks_report', 'kp_sync018_bookmarks_report', 'kp_sync017_bookmarks_report', 'kp_sync016_bookmarks_report'], null); }
   function reportText() { var r = getReport(); return r ? JSON.stringify(r, null, 2) : lang('report_missing'); }
-  function showReport() { var r = getReport(); if (!r) { noty(lang('report_missing')); return; } showText('KinoPUB Sync 0.1.9', r.summaryText || reportText()); }
-  function copyReport() { var text = reportText(); return copyText(text).then(function () { noty(lang('copied')); }).catch(function () { noty(lang('copy_failed')); showText('KinoPUB Sync 0.1.9 — отчёт', text); }); }
+  function showReport() { var r = getReport(); if (!r) { noty(lang('report_missing')); return; } showText('KinoPUB Sync 0.1.10', r.summaryText || reportText()); }
+  function copyReport() { var text = reportText(); return copyText(text).then(function () { noty(lang('copied')); }).catch(function () { noty(lang('copy_failed')); showText('KinoPUB Sync 0.1.10 — отчёт', text); }); }
   function clearReport() { storageRemove(KEY.report); storageRemove(KEY.tokenStatus); storageSet(KEY.lastStatus, ''); noty(lang('report_cleared')); }
 
   function padImdb(id) {
@@ -1323,7 +1323,7 @@
     });
   }
 
-  function getTmdbDiag() { return storageGetAny([KEY.tmdbDiag, 'kp_sync018_tmdb_diag', 'kp_sync017_tmdb_diag', 'kp_sync016_tmdb_diag'], null); }
+  function getTmdbDiag() { return storageGetAny([KEY.tmdbDiag, 'kp_sync019_tmdb_diag', 'kp_sync018_tmdb_diag', 'kp_sync017_tmdb_diag', 'kp_sync016_tmdb_diag'], null); }
 
   function buildTmdbDiagText(diag) {
     if (!diag) return lang('tmdb_diag_missing');
@@ -1639,7 +1639,7 @@
         retryCount: MATCH_RETRY_COUNT,
         retryDelaysMs: MATCH_RETRY_DELAYS.slice(0),
         preferredProvider: preferredTmdbProvider() || '',
-        note: opts.note || 'Only resolved TMDB/Lampa cards found by IMDb are import candidates. Kinopoisk ID is diagnostic unless a reliable Kinopoisk->TMDB/Lampa resolver is implemented. No import. v0.1.9 uses fast TMDB provider preference, retries transient API errors, and can repeat only blocked_api_error items.'
+        note: opts.note || 'Only resolved TMDB/Lampa cards found by IMDb are import candidates. Kinopoisk ID is diagnostic unless a reliable Kinopoisk->TMDB/Lampa resolver is implemented. No import. v0.1.10 uses fast TMDB provider preference, retries transient API errors, and can repeat only blocked_api_error items.'
       },
       tmdbPreflight: null,
       aborted: false,
@@ -1770,11 +1770,11 @@
     });
   }
 
-  function getMatchReport() { return storageGetAny([KEY.matchReport, 'kp_sync018_match_report', 'kp_sync017_match_report'], null); }
+  function getMatchReport() { return storageGetAny([KEY.matchReport, 'kp_sync019_match_report', 'kp_sync018_match_report', 'kp_sync017_match_report'], null); }
   function matchReportText() { var r = getMatchReport(); return r ? JSON.stringify(r, null, 2) : lang('match_missing'); }
-  function showMatchReport() { var r = getMatchReport(); if (!r) { noty(lang('match_missing')); return; } showText('KinoPUB Sync 0.1.9 — готовность импорта', r.summaryText || matchReportText()); }
-  function copyMatchReport() { var text = matchReportText(); return copyText(text).then(function () { noty(lang('copied')); }).catch(function () { noty(lang('copy_failed')); showText('KinoPUB Sync 0.1.9 — отчёт готовности импорта', text); }); }
-  function clearMatchReport() { storageRemove(KEY.matchReport); storageRemove('kp_sync017_match_report'); noty(lang('match_report_cleared')); }
+  function showMatchReport() { var r = getMatchReport(); if (!r) { noty(lang('match_missing')); return; } showText('KinoPUB Sync 0.1.10 — готовность импорта', r.summaryText || matchReportText()); }
+  function copyMatchReport() { var text = matchReportText(); return copyText(text).then(function () { noty(lang('copied')); }).catch(function () { noty(lang('copy_failed')); showText('KinoPUB Sync 0.1.10 — отчёт готовности импорта', text); }); }
+  function clearMatchReport() { storageRemove(KEY.matchReport); storageRemove('kp_sync019_match_report'); storageRemove('kp_sync018_match_report'); storageRemove('kp_sync017_match_report'); noty(lang('match_report_cleared')); }
 
   function favoriteStorage() { var fav = storageGet('favorite', {}) || {}; if (typeof fav === 'string') fav = parseJson(fav) || {}; return fav && typeof fav === 'object' ? fav : {}; }
   function customFavoriteStorage() { var fav = storageGet('custom_favorite', {}) || {}; if (typeof fav === 'string') fav = parseJson(fav) || {}; return fav && typeof fav === 'object' ? fav : {}; }
@@ -1939,8 +1939,8 @@
   function countIdsInArray(arr, ids) { var n = 0; for (var i = 0; arr && i < arr.length; i++) if (ids[String(arr[i])]) n++; return n; }
   function cleanupReport() { return storageGet(KEY.cleanupReport, null); }
   function cleanupReportText() { var r = cleanupReport(); return r ? JSON.stringify(r, null, 2) : lang('cleanup_missing'); }
-  function showCleanupReport() { var r = cleanupReport(); if (!r) { noty(lang('cleanup_missing')); return; } showText('KinoPUB Sync 0.1.9 — очистка Lampa', JSON.stringify(r, null, 2)); }
-  function copyCleanupReport() { var text = cleanupReportText(); return copyText(text).then(function () { noty(lang('copied')); }).catch(function () { noty(lang('copy_failed')); showText('KinoPUB Sync 0.1.9 — очистка Lampa', text); }); }
+  function showCleanupReport() { var r = cleanupReport(); if (!r) { noty(lang('cleanup_missing')); return; } showText('KinoPUB Sync 0.1.10 — очистка Lampa', JSON.stringify(r, null, 2)); }
+  function copyCleanupReport() { var text = cleanupReportText(); return copyText(text).then(function () { noty(lang('copied')); }).catch(function () { noty(lang('copy_failed')); showText('KinoPUB Sync 0.1.10 — очистка Lampa', text); }); }
 
   function applyOldLampaCleanup() {
     var report = cleanupReport();
@@ -1994,7 +1994,7 @@
 
 
   function showCleanupMenu() {
-    var apiName = 'KinoPubSync019';
+    var apiName = 'KinoPubSync0110';
     var btnStyle = 'display:block;width:100%;margin:.45em 0;padding:.65em .75em;border-radius:.45em;border:0;background:#3f51b5;color:#fff;text-align:left;font-size:1em;';
     var smallStyle = 'font-size:.85em;opacity:.75;margin:.25em 0 .75em 0;line-height:1.35';
     function action(fn) {
@@ -2038,35 +2038,35 @@
       if (!window.Lampa || !Lampa.SettingsApi || !Lampa.SettingsApi.addComponent) return;
       var icon = '<svg width="24" height="24" viewBox="0 0 24 24"><path fill="currentColor" d="M12 3a9 9 0 0 0-9 9h2a7 7 0 0 1 11.95-4.95L15 9h6V3l-2.62 2.62A8.97 8.97 0 0 0 12 3Zm7 9a7 7 0 0 1-11.95 4.95L9 15H3v6l2.62-2.62A9 9 0 0 0 21 12h-2Z"/></svg>';
       Lampa.SettingsApi.addComponent({ component: COMPONENT, name: lang('component'), icon: icon });
-      addParam('kp_sync019_sep_main', 'title', '', '', lang('sep'), lang('sep_descr'));
+      addParam('kp_sync0110_sep_main', 'title', '', '', lang('sep'), lang('sep_descr'));
       addParam(KEY.lastStatus, 'input', storageGet(KEY.lastStatus, '') || '', '', lang('status'), lang('status_descr'));
-      addParam('kp_sync019_action_check_token', 'button', '', '', lang('check_token'), lang('check_token_descr'), function () { checkToken(); });
-      addParam('kp_sync019_action_read_bookmarks', 'button', '', '', lang('read_bookmarks'), lang('read_bookmarks_descr'), function () { readBookmarks(); });
-      addParam('kp_sync019_action_show_report', 'button', '', '', lang('show_report'), lang('show_report_descr'), function () { showReport(); });
-      addParam('kp_sync019_action_copy_report', 'button', '', '', lang('copy_report'), lang('copy_report_descr'), function () { copyReport(); });
-      addParam('kp_sync019_action_clear_report', 'button', '', '', lang('clear_report'), lang('clear_report_descr'), function () { clearReport(); });
-      addParam('kp_sync019_sep_match', 'title', '', '', lang('sep_match'), lang('sep_match_descr'));
+      addParam('kp_sync0110_action_check_token', 'button', '', '', lang('check_token'), lang('check_token_descr'), function () { checkToken(); });
+      addParam('kp_sync0110_action_read_bookmarks', 'button', '', '', lang('read_bookmarks'), lang('read_bookmarks_descr'), function () { readBookmarks(); });
+      addParam('kp_sync0110_action_show_report', 'button', '', '', lang('show_report'), lang('show_report_descr'), function () { showReport(); });
+      addParam('kp_sync0110_action_copy_report', 'button', '', '', lang('copy_report'), lang('copy_report_descr'), function () { copyReport(); });
+      addParam('kp_sync0110_action_clear_report', 'button', '', '', lang('clear_report'), lang('clear_report_descr'), function () { clearReport(); });
+      addParam('kp_sync0110_sep_match', 'title', '', '', lang('sep_match'), lang('sep_match_descr'));
       addParam(KEY.matchLimit, 'input', storageGet(KEY.matchLimit, '0') || '0', '', lang('match_limit'), lang('match_limit_descr'));
       addParam(KEY.tmdbProxyEmail, 'input', storageGet(KEY.tmdbProxyEmail, '') || '', '', lang('tmdb_proxy_email'), lang('tmdb_proxy_email_descr'));
-      addParam('kp_sync019_action_test_tmdb', 'button', '', '', lang('test_tmdb'), lang('test_tmdb_descr'), function () { diagnoseTmdbApi(); });
-      addParam('kp_sync019_action_show_tmdb_diag', 'button', '', '', lang('show_tmdb_diag'), lang('show_tmdb_diag_descr'), function () { showTmdbDiag(); });
-      addParam('kp_sync019_action_copy_tmdb_diag', 'button', '', '', lang('copy_tmdb_diag'), lang('copy_tmdb_diag_descr'), function () { copyTmdbDiag(); });
-      addParam('kp_sync019_action_run_match', 'button', '', '', lang('run_match'), lang('run_match_descr'), function () { runMatchAudit(); });
-      addParam('kp_sync019_action_retry_api_errors', 'button', '', '', lang('retry_api_errors'), lang('retry_api_errors_descr'), function () { runRetryApiErrors(); });
-      addParam('kp_sync019_action_show_match', 'button', '', '', lang('show_match'), lang('show_match_descr'), function () { showMatchReport(); });
-      addParam('kp_sync019_action_copy_match', 'button', '', '', lang('copy_match'), lang('copy_match_descr'), function () { copyMatchReport(); });
-      addParam('kp_sync019_action_clear_match', 'button', '', '', lang('clear_match'), lang('clear_match_descr'), function () { clearMatchReport(); });
-      addParam('kp_sync019_sep_cleanup', 'title', '', '', lang('sep_cleanup'), lang('sep_cleanup_descr'));
-      addParam('kp_sync019_action_scan_cleanup', 'button', '', '', lang('scan_bad_lampa'), lang('scan_bad_lampa_descr'), function () { scanOldLampaBookmarks(); });
-      addParam('kp_sync019_action_show_cleanup', 'button', '', '', lang('show_cleanup'), lang('show_cleanup_descr'), function () { showCleanupReport(); });
-      addParam('kp_sync019_action_copy_cleanup', 'button', '', '', lang('copy_cleanup'), lang('copy_cleanup_descr'), function () { copyCleanupReport(); });
-      addParam('kp_sync019_action_apply_cleanup', 'button', '', '', lang('clear_bad_lampa'), lang('clear_bad_lampa_descr'), function () { applyOldLampaCleanup(); });
+      addParam('kp_sync0110_action_test_tmdb', 'button', '', '', lang('test_tmdb'), lang('test_tmdb_descr'), function () { diagnoseTmdbApi(); });
+      addParam('kp_sync0110_action_show_tmdb_diag', 'button', '', '', lang('show_tmdb_diag'), lang('show_tmdb_diag_descr'), function () { showTmdbDiag(); });
+      addParam('kp_sync0110_action_copy_tmdb_diag', 'button', '', '', lang('copy_tmdb_diag'), lang('copy_tmdb_diag_descr'), function () { copyTmdbDiag(); });
+      addParam('kp_sync0110_action_run_match', 'button', '', '', lang('run_match'), lang('run_match_descr'), function () { runMatchAudit(); });
+      addParam('kp_sync0110_action_retry_api_errors', 'button', '', '', lang('retry_api_errors'), lang('retry_api_errors_descr'), function () { runRetryApiErrors(); });
+      addParam('kp_sync0110_action_show_match', 'button', '', '', lang('show_match'), lang('show_match_descr'), function () { showMatchReport(); });
+      addParam('kp_sync0110_action_copy_match', 'button', '', '', lang('copy_match'), lang('copy_match_descr'), function () { copyMatchReport(); });
+      addParam('kp_sync0110_action_clear_match', 'button', '', '', lang('clear_match'), lang('clear_match_descr'), function () { clearMatchReport(); });
+      addParam('kp_sync0110_sep_cleanup', 'title', '', '', lang('sep_cleanup'), lang('sep_cleanup_descr'));
+      addParam('kp_sync0110_action_scan_cleanup', 'button', '', '', lang('scan_bad_lampa'), lang('scan_bad_lampa_descr'), function () { scanOldLampaBookmarks(); });
+      addParam('kp_sync0110_action_show_cleanup', 'button', '', '', lang('show_cleanup'), lang('show_cleanup_descr'), function () { showCleanupReport(); });
+      addParam('kp_sync0110_action_copy_cleanup', 'button', '', '', lang('copy_cleanup'), lang('copy_cleanup_descr'), function () { copyCleanupReport(); });
+      addParam('kp_sync0110_action_apply_cleanup', 'button', '', '', lang('clear_bad_lampa'), lang('clear_bad_lampa_descr'), function () { applyOldLampaCleanup(); });
     } catch (e) { log('settings failed', e && e.message); }
   }
 
   function start() {
-    if (window.KinoPubSync019 && window.KinoPubSync019._started) return;
-    window.KinoPubSync019 = {
+    if (window.KinoPubSync0110 && window.KinoPubSync0110._started) return;
+    window.KinoPubSync0110 = {
       _started: true,
       version: VERSION,
       edition: EDITION,
